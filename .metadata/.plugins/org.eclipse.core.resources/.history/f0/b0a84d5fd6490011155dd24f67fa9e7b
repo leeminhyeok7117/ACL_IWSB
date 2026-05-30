@@ -1,0 +1,600 @@
+/***************************************************************************//**
+ * @file
+ * @brief app_process.c — Slave (Sensor / OTA Client) — Sweep TX
+ *
+ * 기능:
+ *   1. 센서 데이터 처리 (기존 sensor_sink 로직)
+ *   2. OTA Client: 준비 명령 수신 → slot erase → ACK
+ *   3. [핵심] Frequency Sweep TX:
+ *        Master로부터 SWEEP_START 수신
+ *        → RAIL 직접 제어로 채널 테이블 순차 CW 송신
+ *        → 완료 후 SWEEP_DONE 전송
+ *   4. 네트워크 자동 재접속 (Join 실패 시 재시도)
+ *
+ * 의존 컴포넌트 (Simplicity Studio):
+ *   - Connect: Sensor (sensor_sink)
+ *   - OTA Unicast Bootloader Client
+ *   - RAIL Utility: Init         ← RAIL 핸들 접근용, 반드시 추가
+ *   - Sleep Timer
+ *   - Simple LED
+ *
+ * 주의:
+ *   - 스윕 중(~750ms) Connect 통신이 일시 중단됨.
+ *     Master의 heartbeat/polling이 이 시간 내 타임아웃되면
+ *     NETWORK_DOWN이 발생할 수 있음.
+ *     → 통상 Connect 타임아웃은 수 초 이상이므로 문제없음.
+ *   - 주파수 테이블(sweep_freq_hz)은 EFR32FG12 Sub-GHz 범위(169~960 MHz)
+ *     기준이며, 칩 변종/크리스탈 설정에 따라 일부 주파수에서
+ *     RAIL_OverrideDebugFrequency가 실패할 수 있음.
+ *******************************************************************************
+ * SPDX-License-Identifier: Zlib
+ ******************************************************************************/
+
+// -----------------------------------------------------------------------------
+//                                   Includes
+// -----------------------------------------------------------------------------
+#include PLATFORM_HEADER
+#include "stack/include/ember.h"
+#include "em_chip.h"
+#include "app_log.h"
+#include "sl_app_common.h"
+#include "app_framework_common.h"
+#include "sl_simple_led_instances.h"
+#include "app_process.h"
+#include <string.h>
+
+// Sleep Timer
+#include "sl_sleeptimer.h"
+
+// Gecko Bootloader Application Interface (OTA Client)
+#include "btl_interface.h"
+#include "btl_interface_storage.h"
+
+// OTA Unicast Client API
+#include "ota-unicast-bootloader-client.h"
+
+// RAIL (Sweep TX)
+#include "rail.h"
+#include "rail_types.h"
+#include "sl_rail_util_init.h"
+
+// -----------------------------------------------------------------------------
+//                           Sweep 주파수 테이블
+// -----------------------------------------------------------------------------
+// EFR32FG12 Sub-GHz: 169~960 MHz
+// 아래 테이블은 200~900 MHz, 50 MHz 간격, 15채널.
+// → 전체 스윕 시간 = 15 × 50ms = 750ms
+//
+// 주파수를 변경하려면 이 테이블만 수정.
+// 단, SWEEP_FREQ_COUNT (app_process.h)도 함께 변경할 것.
+// Master RX 코드에도 동일 테이블 필요.
+static const uint32_t sweep_freq_hz[SWEEP_FREQ_COUNT] = {
+  200000000UL,   // [0]  200 MHz
+  250000000UL,   // [1]  250 MHz
+  300000000UL,   // [2]  300 MHz
+  350000000UL,   // [3]  350 MHz
+  400000000UL,   // [4]  400 MHz
+  450000000UL,   // [5]  450 MHz
+  500000000UL,   // [6]  500 MHz
+  550000000UL,   // [7]  550 MHz
+  600000000UL,   // [8]  600 MHz
+  650000000UL,   // [9]  650 MHz
+  700000000UL,   // [10] 700 MHz
+  750000000UL,   // [11] 750 MHz
+  800000000UL,   // [12] 800 MHz
+  850000000UL,   // [13] 850 MHz
+  900000000UL,   // [14] 900 MHz
+};
+
+// -----------------------------------------------------------------------------
+//                          Static Function Declarations
+// -----------------------------------------------------------------------------
+static void sweep_tx_tick(void);
+static void sweep_tx_start_channel(uint32_t freq_idx);
+static void sweep_tx_stop_and_restore(void);
+static void send_sweep_done_msg(EmberNodeId target);
+static void send_ota_prepare_ack(EmberNodeId target);
+
+// -----------------------------------------------------------------------------
+//                                Global Variables
+// -----------------------------------------------------------------------------
+EmberMessageOptions tx_options = EMBER_OPTIONS_ACK_REQUESTED
+                                | EMBER_OPTIONS_SECURITY_ENABLED;
+
+// (app_init.c에서 선언됨)
+extern volatile ota_slave_state_t ota_slave_state;
+extern volatile sweep_tx_state_t  sweep_state;
+extern uint32_t join_retry_tick;
+extern bool     network_joined;
+
+// app_init.c의 Join 함수 (재접속 시 호출)
+extern void network_join(void);
+
+// -----------------------------------------------------------------------------
+//                                Static Variables
+// -----------------------------------------------------------------------------
+
+// Sweep TX 내부 상태
+static uint32_t    sweep_freq_idx   = 0;
+static uint32_t    sweep_tick_start = 0;
+static EmberNodeId sweep_master_id  = EMBER_NULL_NODE_ID;
+static RAIL_Handle_t rail_handle    = NULL;
+
+// Join 재시도 간격
+#define JOIN_RETRY_INTERVAL_MS  5000
+
+// -----------------------------------------------------------------------------
+//                          Public Function Definitions
+// -----------------------------------------------------------------------------
+
+/**************************************************************************//**
+ * Incoming message callback
+ *
+ * 처리 메시지:
+ *   1. CUSTOM_MSG_PREPARE_OTA (0xF0) — OTA 준비
+ *   2. CUSTOM_MSG_SWEEP_START (0xF2) — 주파수 스윕 시작
+ *****************************************************************************/
+void emberAfIncomingMessageCallback(EmberIncomingMessage *message)
+{
+  // ─── 커스텀 엔드포인트 메시지 ───
+  if (message->endpoint == CUSTOM_ENDPOINT && message->length >= 1) {
+
+    uint8_t msg_type = message->payload[0];
+
+    // ── OTA 준비 명령 ──
+    if (msg_type == CUSTOM_MSG_PREPARE_OTA) {
+      if (ota_slave_state != OTA_SLAVE_IDLE) {
+        app_log_warning("PREPARE_OTA: Already busy (state=%d)\n",
+                        ota_slave_state);
+        return;
+      }
+      if (sweep_state != SWEEP_IDLE) {
+        app_log_warning("PREPARE_OTA: Sweep running, rejected.\n");
+        return;
+      }
+      if (message->length < 6) {
+        app_log_error("PREPARE_OTA: Payload too short (%d)\n",
+                      message->length);
+        return;
+      }
+
+      uint8_t  tag        = message->payload[1];
+      uint32_t image_size = (uint32_t)message->payload[2]
+                          | ((uint32_t)message->payload[3] << 8)
+                          | ((uint32_t)message->payload[4] << 16)
+                          | ((uint32_t)message->payload[5] << 24);
+
+      app_log_info("OTA PREPARE: tag=0x%02X, size=%lu\n", tag, image_size);
+      ota_slave_state = OTA_SLAVE_PREPARING;
+
+      int32_t ret = bootloader_eraseStorageSlot(0);
+      if (ret != BOOTLOADER_OK) {
+        app_log_error("Slot erase FAILED: 0x%lX\n", ret);
+        ota_slave_state = OTA_SLAVE_ERROR;
+        return;
+      }
+      app_log_info("Slot 0 erased.\n");
+      ota_slave_state = OTA_SLAVE_READY;
+
+      send_ota_prepare_ack(message->source);
+      return;
+    }
+
+    // ── Frequency Sweep 시작 트리거 ──
+    if (msg_type == CUSTOM_MSG_SWEEP_START) {
+      // OTA 진행 중이면 거부
+      if (ota_slave_state != OTA_SLAVE_IDLE) {
+        app_log_warning("SWEEP: OTA busy (state=%d), rejected.\n",
+                        ota_slave_state);
+        return;
+      }
+      // 이미 스윕 중이면 무시
+      if (sweep_state != SWEEP_IDLE) {
+        app_log_warning("SWEEP: Already running (state=%d)\n", sweep_state);
+        return;
+      }
+
+      sweep_master_id  = message->source;
+      sweep_freq_idx   = 0;
+      sweep_tick_start = sl_sleeptimer_get_tick_count();
+      sweep_state      = SWEEP_WAIT_START;
+
+      app_log_info("SWEEP_START from 0x%04X. RF sweep in %d ms...\n",
+                   sweep_master_id, SWEEP_START_DELAY_MS);
+
+      // RAIL 핸들 획득
+      rail_handle = sl_rail_util_get_handle(SL_RAIL_UTIL_HANDLE_INST);
+      if (rail_handle == NULL) {
+        app_log_error("SWEEP: RAIL handle is NULL!\n");
+        sweep_state = SWEEP_IDLE;
+        return;
+      }
+
+      // TX 파워 설정 (전체 스윕에 동일 적용)
+      RAIL_Status_t ret = RAIL_SetTxPowerDbm(rail_handle,
+                                              SWEEP_TX_POWER_DECI_DBM);
+      if (ret != RAIL_STATUS_NO_ERROR) {
+        app_log_warning("SWEEP: SetTxPowerDbm(%d) returned 0x%02X\n",
+                        SWEEP_TX_POWER_DECI_DBM, ret);
+      }
+      return;
+    }
+  }
+
+  // ─── 일반 센서 데이터 메시지 (수신 시 처리할 게 있으면 여기) ───
+  if ((message->endpoint != SL_SENSOR_SINK_ENDPOINT)
+      || ((tx_options & EMBER_OPTIONS_SECURITY_ENABLED)
+          && !(message->options & EMBER_OPTIONS_SECURITY_ENABLED))) {
+    return;
+  }
+}
+
+/**************************************************************************//**
+ * Message sent callback
+ *****************************************************************************/
+void emberAfMessageSentCallback(EmberStatus status,
+                                EmberOutgoingMessage *message)
+{
+  (void)message;
+  if (status != EMBER_SUCCESS) {
+    app_log_error("TX FAILED: 0x%02X\n", status);
+  }
+}
+
+/**************************************************************************//**
+ * Stack status callback — 네트워크 상태 변화 감지 + 자동 재접속
+ *****************************************************************************/
+void emberAfStackStatusCallback(EmberStatus status)
+{
+  switch (status) {
+    case EMBER_NETWORK_UP:
+      app_log_info("Network UP (joined)\n");
+      network_joined = true;
+      break;
+
+    case EMBER_NETWORK_DOWN:
+      app_log_info("Network DOWN\n");
+      network_joined = false;
+      // 스윕 중 일시적 NETWORK_DOWN은 무시 (스윕 완료 후 자동 복구)
+      if (sweep_state != SWEEP_IDLE) {
+        app_log_info("  (during sweep — will recover after sweep)\n");
+      } else {
+        // 스윕 중이 아니면 재접속 시도 예약
+        join_retry_tick = sl_sleeptimer_get_tick_count();
+      }
+      break;
+
+    default:
+      app_log_info("Stack status: 0x%02X\n", status);
+      break;
+  }
+}
+
+/**************************************************************************//**
+ * Tick callback — 메인 루프
+ *
+ * 처리:
+ *   1. LED 상태 표시
+ *   2. Sweep TX 상태머신
+ *   3. Join 재시도 (네트워크 미연결 시)
+ *****************************************************************************/
+void emberAfTickCallback(void)
+{
+  // LED: 스윕 중 빠른 점멸 / 네트워크 UP = ON / DOWN = OFF
+  if (sweep_state != SWEEP_IDLE) {
+    sl_led_toggle(&sl_led_led0);
+  } else if (emberStackIsUp()) {
+    sl_led_turn_on(&sl_led_led0);
+  } else {
+    sl_led_turn_off(&sl_led_led0);
+  }
+
+  // Sweep TX 상태머신
+  sweep_tx_tick();
+
+  // 네트워크 재접속 (스윕 중이 아닐 때만)
+  if (!network_joined && sweep_state == SWEEP_IDLE) {
+    uint32_t elapsed = sl_sleeptimer_tick_to_ms(
+      sl_sleeptimer_get_tick_count() - join_retry_tick);
+    if (elapsed >= JOIN_RETRY_INTERVAL_MS) {
+      app_log_info("Retrying network join...\n");
+      network_join();
+      join_retry_tick = sl_sleeptimer_get_tick_count();
+    }
+  }
+}
+
+/**************************************************************************//**
+ * Frequency Hopping callback
+ *****************************************************************************/
+void emberAfFrequencyHoppingStartClientCompleteCallback(EmberStatus status)
+{
+  if (status != EMBER_SUCCESS) {
+    app_log_error("FH Client sync failed: 0x%02X\n", status);
+  } else {
+    app_log_info("FH Client Sync OK\n");
+  }
+}
+
+// ─── OTA Client Callbacks ───
+
+/**************************************************************************//**
+ * [OTA Client] 새 이미지 제안 — 수락 여부 반환
+ *
+ * NOTE: 콜백 시그니처는 SDK 버전에 따라 다를 수 있음.
+ *       빌드 에러 시 ota-unicast-bootloader-client.h 확인 필요.
+ *****************************************************************************/
+bool emberAfPluginOtaUnicastBootloaderClientNewIncomingImageCallback(
+  EmberNodeId serverId,
+  uint8_t *imageTag,
+  uint32_t imageSize)
+{
+  (void)serverId;
+  (void)imageSize;
+  app_log_info("OTA: Image offered (tag=0x%02X). Accepting.\n", *imageTag);
+  return true;
+}
+
+/**************************************************************************//**
+ * [OTA Client] 이미지 세그먼트 수신 → Bootloader Storage에 기록
+ *****************************************************************************/
+bool emberAfPluginOtaUnicastBootloaderClientIncomingImageSegmentCallback(
+  EmberNodeId serverId,
+  uint32_t startIndex,
+  uint32_t endIndex,
+  uint8_t imageTag,
+  uint8_t *imageSegment)
+{
+  (void)serverId;
+  (void)imageTag;
+
+  uint32_t len = endIndex - startIndex + 1;
+  int32_t ret  = bootloader_writeStorage(0, startIndex, imageSegment, len);
+  if (ret != BOOTLOADER_OK) {
+    app_log_error("OTA: writeStorage FAIL @%lu: 0x%lX\n", startIndex, ret);
+    return false;
+  }
+  return true;
+}
+
+/**************************************************************************//**
+ * [OTA Client] 이미지 다운로드 완료
+ *****************************************************************************/
+void emberAfPluginOtaUnicastBootloaderClientImageDownloadCompleteCallback(
+  EmberAfOtaUnicastBootloaderStatus status,
+  uint8_t imageTag,
+  uint32_t imageSize)
+{
+  (void)imageTag;
+  (void)imageSize;
+
+  if (status == EMBER_OTA_UNICAST_BOOTLOADER_STATUS_SUCCESS) {
+    app_log_info("OTA: Download SUCCESS.\n");
+    ota_slave_state = OTA_SLAVE_READY;
+  } else {
+    app_log_error("OTA: Download FAILED: 0x%02X\n", status);
+    ota_slave_state = OTA_SLAVE_ERROR;
+  }
+}
+
+/**************************************************************************//**
+ * [OTA Client] 부트로드 요청 수신 → 재부팅
+ *****************************************************************************/
+void emberAfPluginOtaUnicastBootloaderClientBootloadRequestCallback(
+  uint32_t bootloadDelayMs,
+  uint8_t imageTag)
+{
+  (void)imageTag;
+  app_log_info("OTA: Bootload request (delay=%lu ms). Rebooting...\n",
+               bootloadDelayMs);
+  sl_sleeptimer_delay_millisecond(bootloadDelayMs);
+  bootloader_rebootAndInstall();
+}
+
+// -----------------------------------------------------------------------------
+//                   Static Function Definitions (Sweep TX)
+// -----------------------------------------------------------------------------
+
+/**************************************************************************//**
+ * sweep_tx_tick() — emberAfTickCallback()에서 매 틱 호출
+ *
+ * 상태 흐름:
+ *
+ *   SWEEP_IDLE ─(SWEEP_START 수신)─→ SWEEP_WAIT_START
+ *     ↓ (SWEEP_START_DELAY_MS 경과)
+ *   SWEEP_TX_NEXT ←──────────────── SWEEP_TX_ACTIVE
+ *     ↓ (채널 전환+CW 시작)          ↑ (dwell time 미경과)
+ *   SWEEP_TX_ACTIVE                  │
+ *     ↓ (dwell time 경과)            │
+ *     ├─ 채널 남음 ───→ idx++ ───→ SWEEP_TX_NEXT
+ *     └─ 마지막 ────→ SWEEP_DONE
+ *                       ↓
+ *                    SWEEP_IDLE (Connect 복구 + DONE 메시지)
+ *****************************************************************************/
+static void sweep_tx_tick(void)
+{
+  if (sweep_state == SWEEP_IDLE) {
+    return;
+  }
+
+  uint32_t elapsed_ms = sl_sleeptimer_tick_to_ms(
+    sl_sleeptimer_get_tick_count() - sweep_tick_start);
+
+  switch (sweep_state) {
+
+    // ── 시작 딜레이 대기 ──
+    case SWEEP_WAIT_START: {
+      if (elapsed_ms >= SWEEP_START_DELAY_MS) {
+        app_log_info("SWEEP: Starting RF sweep (%d ch, %d ms/ch)\n",
+                     SWEEP_FREQ_COUNT, SWEEP_DWELL_MS);
+
+        // Connect 스택의 RAIL 사용을 중단
+        // (진행 중인 TX/RX 즉시 취소)
+        RAIL_Idle(rail_handle, RAIL_IDLE_ABORT, true);
+
+        sweep_freq_idx = 0;
+        sweep_state    = SWEEP_TX_NEXT;
+      }
+      break;
+    }
+
+    // ── 다음 채널 전환 + CW 시작 ──
+    case SWEEP_TX_NEXT: {
+      if (sweep_freq_idx >= SWEEP_FREQ_COUNT) {
+        sweep_state = SWEEP_DONE;
+        break;
+      }
+      sweep_tx_start_channel(sweep_freq_idx);
+      sweep_tick_start = sl_sleeptimer_get_tick_count();
+      sweep_state      = SWEEP_TX_ACTIVE;
+      break;
+    }
+
+    // ── CW 송신 유지 (dwell time 대기) ──
+    case SWEEP_TX_ACTIVE: {
+      if (elapsed_ms >= SWEEP_DWELL_MS) {
+        RAIL_StopTxStream(rail_handle);
+
+        app_log_info("SWEEP: [%02lu] %lu MHz done\n",
+                     sweep_freq_idx,
+                     sweep_freq_hz[sweep_freq_idx] / 1000000UL);
+
+        sweep_freq_idx++;
+        sweep_state = SWEEP_TX_NEXT;
+      }
+      break;
+    }
+
+    // ── 완료 처리 ──
+    case SWEEP_DONE: {
+      app_log_info("SWEEP: Complete. Restoring Connect.\n");
+
+      // Connect RF 복구
+      sweep_tx_stop_and_restore();
+
+      // Master에 완료 알림
+      send_sweep_done_msg(sweep_master_id);
+
+      sweep_master_id = EMBER_NULL_NODE_ID;
+      sweep_state     = SWEEP_IDLE;
+      break;
+    }
+
+    default:
+      sweep_state = SWEEP_IDLE;
+      break;
+  }
+}
+
+/**************************************************************************//**
+ * sweep_tx_start_channel() — 주파수 설정 + CW 송신 시작
+ *
+ * RAIL API:
+ *   RAIL_OverrideDebugFrequency(): 채널 0의 주파수를 임의값으로 오버라이드
+ *   RAIL_StartTxStream():          CW 반송파 연속 송신 시작
+ *
+ * @param freq_idx  sweep_freq_hz[] 배열 인덱스
+ *****************************************************************************/
+static void sweep_tx_start_channel(uint32_t freq_idx)
+{
+  uint32_t freq = sweep_freq_hz[freq_idx];
+
+  RAIL_Status_t ret;
+
+  // 주파수 오버라이드
+  ret = RAIL_OverrideDebugFrequency(rail_handle, freq);
+  if (ret != RAIL_STATUS_NO_ERROR) {
+    // 실패 가능 원인: 주파수가 칩 synthesizer 튜닝 범위 밖
+    app_log_error("SWEEP: OverrideFreq(%lu Hz) FAIL: 0x%02X\n", freq, ret);
+  }
+
+  // CW (Carrier Wave) 송신 시작
+  ret = RAIL_StartTxStream(rail_handle, 0, RAIL_STREAM_CARRIER_WAVE);
+  if (ret != RAIL_STATUS_NO_ERROR) {
+    app_log_error("SWEEP: StartTxStream FAIL @ %lu MHz: 0x%02X\n",
+                  freq / 1000000UL, ret);
+  }
+}
+
+/**************************************************************************//**
+ * sweep_tx_stop_and_restore() — CW 중단 + Connect RF 상태 복구
+ *
+ * 순서:
+ *   1. CW 스트림 중단 (혹시 남아있을 경우 대비)
+ *   2. 주파수 오버라이드 해제 (0 전달 → 원래 채널 주파수 복구)
+ *   3. 채널 0 RX 진입 → Connect 스택 자동 재접수
+ *****************************************************************************/
+static void sweep_tx_stop_and_restore(void)
+{
+  RAIL_StopTxStream(rail_handle);
+  RAIL_OverrideDebugFrequency(rail_handle, 0);
+  RAIL_StartRx(rail_handle, 0, NULL);
+
+  app_log_info("SWEEP: RF restored (ch0 RX mode).\n");
+}
+
+/**************************************************************************//**
+ * send_sweep_done_msg() — Master에 스윕 완료 알림 전송
+ *
+ * Payload:
+ *   [0] CUSTOM_MSG_SWEEP_DONE (0xF3)
+ *   [1] 채널 수
+ *   [2] dwell time (ms)
+ *   [3] TX power (dBm)
+ *****************************************************************************/
+static void send_sweep_done_msg(EmberNodeId target)
+{
+  uint8_t msg[4];
+  msg[0] = CUSTOM_MSG_SWEEP_DONE;
+  msg[1] = (uint8_t)SWEEP_FREQ_COUNT;
+  msg[2] = (uint8_t)SWEEP_DWELL_MS;
+  msg[3] = (int8_t)(SWEEP_TX_POWER_DECI_DBM / 10);
+
+  EmberStatus st = emberMessageSend(target, CUSTOM_ENDPOINT, 0,
+                                     sizeof(msg), msg, tx_options);
+  if (st == EMBER_SUCCESS) {
+    app_log_info("SWEEP: DONE sent to 0x%04X\n", target);
+  } else {
+    app_log_error("SWEEP: DONE send FAIL: 0x%02X\n", st);
+  }
+}
+
+/**************************************************************************//**
+ * send_ota_prepare_ack() — OTA 준비 완료 ACK
+ *****************************************************************************/
+static void send_ota_prepare_ack(EmberNodeId target)
+{
+  uint8_t msg[1] = { CUSTOM_MSG_PREPARE_ACK };
+
+  EmberStatus st = emberMessageSend(target, CUSTOM_ENDPOINT, 0,
+                                     sizeof(msg), msg, tx_options);
+  if (st == EMBER_SUCCESS) {
+    app_log_info("OTA: ACK sent to 0x%04X\n", target);
+  } else {
+    app_log_error("OTA: ACK FAIL: 0x%02X\n", st);
+  }
+}
+
+// -----------------------------------------------------------------------------
+//                         RTOS Task (기존 유지)
+// -----------------------------------------------------------------------------
+#if defined(EMBER_AF_PLUGIN_MICRIUM_RTOS) && defined(EMBER_AF_PLUGIN_MICRIUM_RTOS_APP_TASK1)
+void emberAfPluginMicriumRtosAppTask1InitCallback(void)
+{
+  app_log_info("app task init\n");
+}
+
+#include <kernel/include/os.h>
+#define TICK_INTERVAL_MS 1000
+
+void emberAfPluginMicriumRtosAppTask1MainLoopCallback(void *p_arg)
+{
+  RTOS_ERR err;
+  OS_TICK yield_time_ticks = (OSCfg_TickRate_Hz * TICK_INTERVAL_MS) / 1000;
+
+  while (true) {
+    app_log_info("app task tick\n");
+    OSTimeDly(yield_time_ticks, OS_OPT_TIME_DLY, &err);
+  }
+}
+#endif

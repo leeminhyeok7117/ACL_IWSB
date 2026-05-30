@@ -1,0 +1,56 @@
+#include "em_cmu.h"
+#include "em_gpio.h"
+#include "em_i2c.h"
+#include "btl_interface.h"
+#include "app_i2c_dfu.h"
+
+/* 전역 변수 정의 */
+volatile uint8_t    i2c_rx_buf[I2C_RX_BUF_SIZE];
+volatile uint16_t   i2c_rx_len   = 0;
+volatile bool       i2c_pkt_ready = false;
+volatile DFU_State_t dfu_state    = DFU_IDLE;
+
+static void i2c_slave_init(void)
+{
+    /* 1. Clock 활성화 */
+    CMU_ClockEnable(cmuClock_GPIO, true);
+    CMU_ClockEnable(cmuClock_I2C0, true);
+
+    /* 2. GPIO 설정: PC10=SDA, PC11=SCL
+     * 공식문서 기준: Wired-And + Pull-up filter */
+    GPIO_PinModeSet(gpioPortC, 10, gpioModeWiredAndPullUpFilter, 1); // SCL
+    GPIO_PinModeSet(gpioPortC, 11, gpioModeWiredAndPullUpFilter, 1); // SDA
+
+    /* 3. I2C 초기화 (Slave 모드) */
+    I2C_Init_TypeDef i2cInit = I2C_INIT_DEFAULT;
+    i2cInit.master = false;
+    i2cInit.freq   = I2C_FREQ_FAST_MAX;
+    i2cInit.clhr   = i2cClockHLRAsymetric;
+    I2C_Init(I2C0, &i2cInit);
+
+    /* 4. 핀 라우팅: PC10/PC11 → LOC4 */
+    I2C0->ROUTEPEN  = I2C_ROUTEPEN_SDAPEN | I2C_ROUTEPEN_SCLPEN;
+    I2C0->ROUTELOC0 = (I2C0->ROUTELOC0 & (~_I2C_ROUTELOC0_SDALOC_MASK))
+                    | I2C_ROUTELOC0_SDALOC_LOC16;
+    I2C0->ROUTELOC0 = (I2C0->ROUTELOC0 & (~_I2C_ROUTELOC0_SCLLOC_MASK))
+                    | I2C_ROUTELOC0_SCLLOC_LOC14;
+
+    I2C0->SADDR     = I2C_SLAVE_ADDR;
+    I2C0->SADDRMASK = 0xFE;
+
+    /* 7. 인터럽트 설정
+     * 공식문서: "interrupt mode에서는 NVIC 설정 및 활성화 필수" */
+    I2C_IntClear(I2C0, I2C_IFC_ADDR | I2C_IF_RXDATAV | I2C_IFC_SSTOP);
+    I2C_IntEnable(I2C0, I2C_IEN_ADDR | I2C_IEN_RXDATAV | I2C_IEN_SSTOP);
+    NVIC_ClearPendingIRQ(I2C0_IRQn);
+    NVIC_EnableIRQ(I2C0_IRQn);
+}
+
+void app_init(void)
+{
+    /* Bootloader Interface 초기화 */
+    bootloader_init();
+
+    /* I2C Slave 초기화 */
+    i2c_slave_init();
+}

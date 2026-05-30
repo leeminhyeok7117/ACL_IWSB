@@ -1,0 +1,333 @@
+/***************************************************************************//**
+ * @file
+ * @brief app_cli.c — Slave (Sensor / OTA Client)
+ *
+ * [Device ID 프로비저닝]
+ *   set_id <1-4> : NVM3에 영구 저장. OTA 후에도 유지.
+ *   최초 J-Link 플래시 후 UART 터미널에서 1회 실행하면 된다.
+ *******************************************************************************
+ * SPDX-License-Identifier: Zlib
+ ******************************************************************************/
+
+#include <string.h>
+#include PLATFORM_HEADER
+#include "em_chip.h"
+#include "em_cmu.h"
+#include "stack/include/ember.h"
+#include "sl_cli.h"
+#include "app_log.h"
+#include "sl_app_common.h"
+#include "stack-info.h"
+#include "app_init.h"
+#include "app_process.h"
+#include "mbedtls/build_info.h"
+#include "nvm3_default.h"
+
+#define ENABLED  "enabled"
+#define DISABLED "disabled"
+#define DATA_ENDPOINT    1
+#define TX_TEST_ENDPOINT 2
+
+static bool check_channel(uint16_t channel);
+
+EmberKeyData security_key = { .contents = SL_SENSOR_SINK_SECURITY_KEY };
+psa_key_id_t security_key_id = 0;
+
+extern uint8_t my_device_id;
+extern EmberEventControl *report_control;
+
+static int16_t tx_power = SL_SENSOR_SINK_TX_POWER;
+
+static bool check_channel(uint16_t channel)
+{
+  uint16_t default_channel = emberGetDefaultChannel();
+  if (channel < default_channel) {
+    app_log_info("Channel %d is invalid, the first valid channel is %d!\n",
+                 channel, default_channel);
+    return false;
+  }
+  return true;
+}
+
+/******************************************************************************
+ * CLI - set_id
+ *   사용법: set_id <1-4>
+ *   NVM3에 영구 저장. OTA 후에도 device_id 유지.
+ *   최초 J-Link 플래시 후 UART에서 1회 실행.
+ *****************************************************************************/
+void cli_set_device_id(sl_cli_command_arg_t *arguments)
+{
+  uint8_t new_id = sl_cli_get_argument_uint8(arguments, 0);
+  if (new_id < 1 || new_id > 4) {
+    app_log_error("set_id: invalid value=%d (valid: 1~4)\n", new_id);
+    return;
+  }
+
+  uint32_t nvm3_val = (uint32_t)new_id;
+  Ecode_t ec = nvm3_writeData(nvm3_defaultHandle,
+                              NVM3_KEY_DEVICE_ID,
+                              &nvm3_val, sizeof(nvm3_val));
+  if (ec != ECODE_NVM3_OK) {
+    app_log_error("set_id: NVM3 write FAILED: 0x%lX\n", ec);
+    return;
+  }
+
+  my_device_id = new_id;
+  app_log_info("Device ID set to %d and saved to NVM3. Survives OTA.\n", new_id);
+  app_log_info("Reset to apply: cli_reset\n");
+}
+
+void cli_join(sl_cli_command_arg_t *arguments)
+{
+  EmberNetworkParameters parameters;
+  uint16_t channel = sl_cli_get_argument_uint8(arguments, 0);
+  if (!check_channel(channel)) return;
+
+  MEMSET(&parameters, 0, sizeof(EmberNetworkParameters));
+  parameters.radioTxPower = tx_power;
+  parameters.radioChannel = channel;
+  if (sl_cli_get_argument_count(arguments) > 1) {
+    parameters.panId = sl_cli_get_argument_uint16(arguments, 1);
+  } else {
+    parameters.panId = SL_SENSOR_SINK_PAN_ID;
+  }
+  emberClearSelectiveJoinPayload();
+  EmberStatus status = emberJoinNetwork(EMBER_STAR_END_DEVICE, &parameters);
+  app_log_info("join end device: status 0x%02X\n", status);
+}
+
+void cli_join_sleepy(sl_cli_command_arg_t *arguments)
+{
+  EmberNetworkParameters parameters;
+  uint16_t channel = sl_cli_get_argument_uint8(arguments, 0);
+  if (!check_channel(channel)) return;
+  MEMSET(&parameters, 0, sizeof(EmberNetworkParameters));
+  parameters.radioTxPower = tx_power;
+  parameters.radioChannel = channel;
+  if (sl_cli_get_argument_count(arguments) > 1) {
+    parameters.panId = sl_cli_get_argument_uint16(arguments, 1);
+  } else {
+    parameters.panId = SL_SENSOR_SINK_PAN_ID;
+  }
+  EmberStatus status = emberJoinNetwork(EMBER_STAR_SLEEPY_END_DEVICE, &parameters);
+  app_log_info("join sleepy 0x%02X\n", status);
+}
+
+void cli_join_extender(sl_cli_command_arg_t *arguments)
+{
+  EmberNetworkParameters parameters;
+  uint16_t channel = sl_cli_get_argument_uint8(arguments, 0);
+  if (!check_channel(channel)) return;
+  MEMSET(&parameters, 0, sizeof(EmberNetworkParameters));
+  parameters.radioTxPower = tx_power;
+  parameters.radioChannel = channel;
+  if (sl_cli_get_argument_count(arguments) > 1) {
+    parameters.panId = sl_cli_get_argument_uint16(arguments, 1);
+  } else {
+    parameters.panId = SL_SENSOR_SINK_PAN_ID;
+  }
+  EmberStatus status = emberJoinNetwork(EMBER_STAR_RANGE_EXTENDER, &parameters);
+  app_log_info("join range extender 0x%02X\n", status);
+}
+
+void cli_pjoin(sl_cli_command_arg_t *arguments)
+{
+  EmberStatus status;
+  uint8_t duration = sl_cli_get_argument_uint8(arguments, 0);
+  size_t length = 0;
+  uint8_t *contents = NULL;
+  if (sl_cli_get_argument_count(arguments) > 1) {
+    contents = sl_cli_get_argument_hex(arguments, 1, &length);
+    status = emberSetSelectiveJoinPayload(length, contents);
+    if (status != EMBER_SUCCESS) app_log_warning("Join Payload status:%d ", status);
+  } else {
+    emberClearSelectiveJoinPayload();
+  }
+  status = emberPermitJoining(duration);
+  if (status != EMBER_SUCCESS) app_log_info("Permit join status: 0x%02X", status);
+}
+
+void cli_info(sl_cli_command_arg_t *arguments)
+{
+  (void)arguments;
+  uint8_t *eui64 = emberGetEui64();
+  char *is_ack       = ((tx_options & EMBER_OPTIONS_ACK_REQUESTED)    ? ENABLED : DISABLED);
+  char *is_security  = ((tx_options & EMBER_OPTIONS_SECURITY_ENABLED) ? ENABLED : DISABLED);
+  char *is_high_prio = ((tx_options & EMBER_OPTIONS_HIGH_PRIORITY)    ? ENABLED : DISABLED);
+
+  app_log_info("Info:\n");
+  app_log_info("         MCU Id: 0x%016llX\n", SYSTEM_GetUnique());
+  app_log_info("  Network state: 0x%02X\n", emberNetworkState());
+  app_log_info("      Node type: 0x%02X\n", emberGetNodeType());
+  app_log_info("        Node id: 0x%04X\n", emberGetNodeId());
+  app_log_info("         Pan id: 0x%04X\n", emberGetPanId());
+  app_log_info("        Channel: %d\n", (uint16_t)emberGetRadioChannel());
+  app_log_info("          Power: %d\n", (int16_t)emberGetRadioPower());
+  app_log_info("  Device ID    : %d %s\n",
+               my_device_id,
+               (my_device_id == 0xFF) ? "(UNPROVISIONED!)" : "(NVM3)");
+  app_log_info("          EUI64: ");
+  for (uint8_t i = EUI64_SIZE; i > 0; i--) {
+    app_log_info("%02X", eui64[i - 1]);
+  }
+  app_log_info("\n");
+  app_log_info("     TX options: MAC acks %s, security %s, priority %s\n",
+               is_ack, is_security, is_high_prio);
+}
+
+void cli_counter(sl_cli_command_arg_t *arguments)
+{
+  uint8_t counter_type = sl_cli_get_argument_uint8(arguments, 0);
+  uint32_t counter;
+  EmberStatus status = emberGetCounter(counter_type, &counter);
+  if (status == EMBER_SUCCESS) {
+    app_log_info("Counter type=0x%02X: %lu\n", counter_type, counter);
+  } else {
+    app_log_error("Get counter failed, status=0x%02X\n", status);
+  }
+}
+
+void cli_start_energy_scan(sl_cli_command_arg_t *arguments)
+{
+  uint8_t channel    = sl_cli_get_argument_uint8(arguments, 0);
+  uint8_t sample_num = sl_cli_get_argument_uint8(arguments, 1);
+  EmberStatus status = emberStartEnergyScan(channel, sample_num);
+  if (status == EMBER_SUCCESS) {
+    app_log_info("Start energy scanning: channel %d, samples %d\n", channel, sample_num);
+  } else {
+    app_log_error("Start energy scanning failed, status=0x%02X\n", status);
+  }
+}
+
+void cli_leave(sl_cli_command_arg_t *arguments)
+{
+  (void)arguments;
+  app_log_warning("WARNING: This erases NVM3 network state. Use only for debug/reset.\n");
+  emberResetNetworkState();
+}
+
+void cli_set_tx_option(sl_cli_command_arg_t *arguments)
+{
+  tx_options = sl_cli_get_argument_uint8(arguments, 0);
+  app_log_info("TX options set: acks %s, security %s, priority %s\n",
+               ((tx_options & EMBER_OPTIONS_ACK_REQUESTED)    ? ENABLED : DISABLED),
+               ((tx_options & EMBER_OPTIONS_SECURITY_ENABLED) ? ENABLED : DISABLED),
+               ((tx_options & EMBER_OPTIONS_HIGH_PRIORITY)    ? ENABLED : DISABLED));
+}
+
+void cli_reset(sl_cli_command_arg_t *arguments)
+{
+  (void)arguments;
+  NVIC_SystemReset();
+}
+
+void cli_set_report_period(sl_cli_command_arg_t *arguments)
+{
+  sensor_report_period_ms = sl_cli_get_argument_uint16(arguments, 0);
+  app_log_info("Report period set to %d ms\n", sensor_report_period_ms);
+}
+
+void cli_data(sl_cli_command_arg_t *arguments)
+{
+  (void)arguments;
+  if (report_control == NULL) {
+    app_log_error("data: report_control not initialized.\n");
+    return;
+  }
+  emberEventControlSetActive(*report_control);
+}
+
+void cli_set_tx_power(sl_cli_command_arg_t *arguments)
+{
+  bool save_power = false;
+  tx_power = sl_cli_get_argument_int16(arguments, 0);
+  if (sl_cli_get_argument_count(arguments) > 1) {
+    save_power = sl_cli_get_argument_int8(arguments, 1);
+  }
+  if (emberSetRadioPower(tx_power, save_power) == EMBER_SUCCESS) {
+    app_log_info("TX power set: %d\n", (int16_t)emberGetRadioPower());
+  } else {
+    app_log_error("TX power set failed\n");
+  }
+}
+
+void cli_set_security_key(sl_cli_command_arg_t *arguments)
+{
+#ifdef SL_CATALOG_CONNECT_AES_SECURITY_PRESENT
+  size_t key_hex_length = 0;
+  uint8_t *key_hex_value = sl_cli_get_argument_hex(arguments, 0, &key_hex_length);
+  if (key_hex_length != EMBER_ENCRYPTION_KEY_SIZE) {
+    app_log_info("Security key length must be: %d bytes\n", EMBER_ENCRYPTION_KEY_SIZE);
+    return;
+  }
+  set_security_key(key_hex_value, key_hex_length);
+#else
+  (void)arguments;
+  app_log_info("Security key set failed\n");
+#endif
+}
+
+bool set_security_key(uint8_t *key, size_t key_length)
+{
+  bool success = false;
+  EmberStatus em_status = EMBER_ERR_FATAL;
+  psa_key_attributes_t key_attr;
+
+  key_attr = psa_key_attributes_init();
+  psa_status_t psa_status = psa_get_key_attributes(security_key_id, &key_attr);
+  if (psa_status != PSA_ERROR_INVALID_HANDLE) {
+    psa_reset_key_attributes(&key_attr);
+    psa_destroy_key(security_key_id);
+  } else {
+    psa_reset_key_attributes(&key_attr);
+  }
+
+  key_attr = psa_key_attributes_init();
+  psa_set_key_type(&key_attr, PSA_KEY_TYPE_AES);
+  psa_set_key_bits(&key_attr, 128);
+  psa_set_key_usage_flags(&key_attr, PSA_KEY_USAGE_ENCRYPT | PSA_KEY_USAGE_DECRYPT);
+  psa_set_key_algorithm(&key_attr, PSA_ALG_ECB_NO_PADDING);
+  psa_set_key_id(&key_attr, security_key_id);
+
+#ifdef PSA_KEY_LOCATION_SLI_SE_OPAQUE
+  psa_set_key_lifetime(&key_attr,
+                       PSA_KEY_LIFETIME_FROM_PERSISTENCE_AND_LOCATION(
+                         PSA_KEY_LIFETIME_PERSISTENT, PSA_KEY_LOCATION_SLI_SE_OPAQUE));
+#else
+#ifdef MBEDTLS_PSA_CRYPTO_STORAGE_C
+  psa_set_key_lifetime(&key_attr,
+                       PSA_KEY_LIFETIME_FROM_PERSISTENCE_AND_LOCATION(
+                         PSA_KEY_LIFETIME_PERSISTENT, PSA_KEY_LOCATION_LOCAL_STORAGE));
+#else
+  psa_set_key_lifetime(&key_attr,
+                       PSA_KEY_LIFETIME_FROM_PERSISTENCE_AND_LOCATION(
+                         PSA_KEY_LIFETIME_VOLATILE, PSA_KEY_LOCATION_LOCAL_STORAGE));
+#endif
+#endif
+
+  psa_status = psa_import_key(&key_attr, key, key_length, &security_key_id);
+  psa_reset_key_attributes(&key_attr);
+  if (psa_status == PSA_SUCCESS) {
+    app_log_info("Security key import successful, key id: %lu\n", security_key_id);
+  } else {
+    app_log_info("Security Key import failed: %ld\n", psa_status);
+  }
+
+  em_status = emberSetPsaSecurityKey(security_key_id);
+  if (em_status == EMBER_SUCCESS) {
+    app_log_info("Security key set successful\n");
+    success = true;
+  } else {
+    app_log_info("Security key set failed 0x%02X\n", em_status);
+  }
+  return success;
+}
+
+void cli_unset_security_key(sl_cli_command_arg_t *arguments)
+{
+  (void)arguments;
+#ifdef SL_CATALOG_CONNECT_AES_SECURITY_PRESENT
+  emberRemovePsaSecurityKey();
+  app_log_info("Security key unset successful\n");
+#endif
+}

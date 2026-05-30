@@ -1,0 +1,24 @@
+/***************************************************************************//**
+ * @file
+ * @brief app_process.h — OTA 자동화 공유 타입/선언
+ ******************************************************************************/
+#ifndef APP_PROCESS_H
+#define APP_PROCESS_H
+
+#include "stack/include/ember.h"
+
+// OTA 자동화 상태머신
+typedef enum {
+  OTA_IDLE = 0,               // 대기 중
+  OTA_RECEIVING_FW,           // AP_OBC로부터 GBL 수신 중
+  OTA_FW_READY,               // GBL 수신 완료, 배포 대기
+  OTA_FW_READY_MANUAL,
+  OTA_WAITING_SLAVE_PREPARE,  // Slave 준비 ACK 대기
+  OTA_DISTRIBUTING,           // OTA 배포 진행 중
+  OTA_REQUEST_BOOTLOAD,       // 부트로드 요청 단계
+  OTA_WAITING_BOOTLOAD,       // 부트로드 완료 대기
+  OTA_COMPLETE,               // 전체 완료
+  OTA_ERROR                   // 에러 발생
+} ota_master_state_t;
+
+#endif // APP_PROCESS_H

@@ -1,0 +1,210 @@
+/***************************************************************************//**
+ * @file
+ * @brief app_init.c — Slave (Sensor / OTA Client) — Stable Auto-Join OTA
+ *
+ * [재작성 핵심 — 안정성]
+ *   1) emberResetNetworkState() 제거.
+ *      → 부팅마다 네트워크를 잊고 새 Join 하던 동작을 완전히 폐기.
+ *   2) emberNetworkInit() 로 NVM3에 저장된 NodeID/PAN/채널/부모를 복원.
+ *      - 이미 가입돼 있으면(=resume) 동일 NodeID 로 즉시 복귀 (EMBER_NETWORK_UP 콜백).
+ *      - 한 번도 가입한 적 없을 때(EMBER_NOT_JOINED)만 최초 1회 Join.
+ *   3) device_id 를 NVM3에서 로드(없으면 MY_DEVICE_ID 폴백).
+ *      → set_id 가 실제로 부팅 후에도 적용됨.
+ *   4) 최초 Join 채널을 emberGetDefaultChannel() 로 통일(채널 0 하드코딩 제거).
+ *
+ *   ※ 노드의 "주소(NodeID)" 는 Connect 스택이 NVM3 토큰에 이미 자동 저장한다.
+ *     별도 저장 구현이 필요 없으며, 지우지 않고 복원만 하면 안정적으로 유지됨.
+ *******************************************************************************
+ * SPDX-License-Identifier: Zlib
+ ******************************************************************************/
+
+// -----------------------------------------------------------------------------
+//                                   Includes
+// -----------------------------------------------------------------------------
+#include "app_log.h"
+#include "sl_app_common.h"
+#include "stack/include/ember.h"
+#include "app_process.h"
+#include "app_init.h"
+#include "app_framework_common.h"
+#include "psa/crypto.h"
+#include "mbedtls/build_info.h"
+#include "btl_interface.h"
+#include "btl_interface_storage.h"
+#include "nvm3_default.h"
+#include <string.h>
+
+// -----------------------------------------------------------------------------
+//                              Macros and Typedefs
+// -----------------------------------------------------------------------------
+#define PSA_AES_KEY_ID          1
+#define SLAVE_TX_POWER          0
+#define SLAVE_FIRST_JOIN_PANID  0xFFFF   // 최초 1회 Join 시에만 사용 (이후 복원)
+
+// -----------------------------------------------------------------------------
+//                          Static Function Declarations
+// -----------------------------------------------------------------------------
+static void bootloader_storage_init(void);
+static void load_device_id_from_nvm(void);
+static void resume_or_join_network(void);
+
+// app_process.c 에서 정의 (최초/복구 Join 공용 진입점)
+void start_initial_join(void);
+
+// -----------------------------------------------------------------------------
+//                                Global Variables
+// -----------------------------------------------------------------------------
+extern EmberKeyData security_key;
+extern psa_key_id_t security_key_id;
+
+volatile bool network_joined   = false;
+volatile bool join_in_progress = false;
+
+// NVM3 우선 로드. 미설정 시 app_process.h 의 MY_DEVICE_ID 폴백.
+uint8_t my_device_id = MY_DEVICE_ID;
+
+// -----------------------------------------------------------------------------
+//                          Public Function Definitions
+// -----------------------------------------------------------------------------
+void emberAfInitCallback(void)
+{
+  EmberStatus em_status = EMBER_ERR_FATAL;
+
+  psa_crypto_init();
+
+  // ─── device_id 로드 (NVM3 우선) ───
+  load_device_id_from_nvm();
+  app_log_info("\n=== Slave (Sensor / OTA Client) | device_id=%d ===\n",
+               my_device_id);
+
+  // ─── Security Key 설정 ───
+  security_key_id = PSA_AES_KEY_ID;
+  psa_key_attributes_t key_attr = psa_key_attributes_init();
+  psa_status_t psa_status = psa_get_key_attributes(security_key_id, &key_attr);
+  if (psa_status == PSA_ERROR_INVALID_HANDLE) {
+    app_log_info("No PSA AES key found, creating one.\n");
+    psa_set_key_id(&key_attr, security_key_id);
+    psa_set_key_algorithm(&key_attr, PSA_ALG_ECB_NO_PADDING);
+    psa_set_key_usage_flags(&key_attr, PSA_KEY_USAGE_ENCRYPT | PSA_KEY_USAGE_DECRYPT);
+    psa_set_key_type(&key_attr, PSA_KEY_TYPE_AES);
+    psa_set_key_bits(&key_attr, 128);
+
+#ifdef PSA_KEY_LOCATION_SLI_SE_OPAQUE
+    psa_set_key_lifetime(&key_attr,
+                         PSA_KEY_LIFETIME_FROM_PERSISTENCE_AND_LOCATION(
+                           PSA_KEY_LIFETIME_PERSISTENT,
+                           PSA_KEY_LOCATION_SLI_SE_OPAQUE));
+#else
+#ifdef MBEDTLS_PSA_CRYPTO_STORAGE_C
+    psa_set_key_lifetime(&key_attr,
+                         PSA_KEY_LIFETIME_FROM_PERSISTENCE_AND_LOCATION(
+                           PSA_KEY_LIFETIME_PERSISTENT,
+                           PSA_KEY_LOCATION_LOCAL_STORAGE));
+#else
+    psa_set_key_lifetime(&key_attr,
+                         PSA_KEY_LIFETIME_FROM_PERSISTENCE_AND_LOCATION(
+                           PSA_KEY_LIFETIME_VOLATILE,
+                           PSA_KEY_LOCATION_LOCAL_STORAGE));
+#endif
+#endif
+
+    psa_status = psa_import_key(&key_attr,
+                                security_key.contents,
+                                (size_t)EMBER_ENCRYPTION_KEY_SIZE,
+                                &security_key_id);
+    if (psa_status == PSA_SUCCESS) {
+      app_log_info("Security key import OK, id: %lu\n", security_key_id);
+    } else {
+      app_log_info("Security key import FAIL: %ld\n", psa_status);
+    }
+  } else {
+    app_log_info("PSA AES key exists, reusing.\n");
+  }
+
+  em_status = emberSetPsaSecurityKey(security_key_id);
+  (void)em_status;
+
+  // ─── 네트워크 복원/가입 ───
+  //   ❌ emberResetNetworkState()  (제거됨 — 매 부팅 NVM 폐기의 원인)
+  //   ✅ emberNetworkInit()        (NVM3 저장 상태 복원)
+  resume_or_join_network();
+
+  // ─── Bootloader Storage 초기화 ───
+  bootloader_storage_init();
+
+  app_log_info("Slave init complete.\n");
+}
+
+// -----------------------------------------------------------------------------
+//                          Static Function Definitions
+// -----------------------------------------------------------------------------
+
+/**************************************************************************//**
+ * NVM3에서 device_id 로드. 1~4 범위의 유효값이 있으면 적용, 없으면 폴백 유지.
+ *****************************************************************************/
+static void load_device_id_from_nvm(void)
+{
+  uint32_t obj_type = 0;
+  size_t   obj_len  = 0;
+
+  Ecode_t ec = nvm3_getObjectInfo(nvm3_defaultHandle,
+                                  (nvm3_ObjectKey_t)DEVICE_ID_NVM3_KEY,
+                                  &obj_type, &obj_len);
+  if (ec == ECODE_NVM3_OK && obj_len == sizeof(uint8_t)) {
+    uint8_t stored = 0;
+    ec = nvm3_readData(nvm3_defaultHandle,
+                       (nvm3_ObjectKey_t)DEVICE_ID_NVM3_KEY,
+                       &stored, sizeof(stored));
+    if (ec == ECODE_NVM3_OK && stored >= 1 && stored <= 4) {
+      my_device_id = stored;
+      app_log_info("device_id loaded from NVM3: %d\n", my_device_id);
+      return;
+    }
+  }
+  app_log_info("device_id not in NVM3, using fallback %d. (run CLI 'set_id')\n",
+               my_device_id);
+}
+
+/**************************************************************************//**
+ * 부팅 시 네트워크 복원 또는 최초 가입.
+ *   - emberNetworkInit() 가 EMBER_NOT_JOINED 를 반환하면 → 최초 1회 Join.
+ *   - 그 외(=resume 진행) 는 EMBER_NETWORK_UP 콜백에서 network_joined 처리.
+ *     resume 가 멈추는 경우를 대비해 join_in_progress 로 워치독을 무장.
+ *****************************************************************************/
+static void resume_or_join_network(void)
+{
+  EmberStatus status = emberNetworkInit();
+  app_log_info("emberNetworkInit: 0x%02X (netState=0x%02X)\n",
+               status, emberNetworkState());
+
+  if (status == EMBER_NOT_JOINED) {
+    app_log_info("No saved network. One-time join...\n");
+    network_joined   = false;
+    join_in_progress = false;
+    start_initial_join();              // 최초 1회만 Join
+  } else {
+    // 저장된 네트워크 복원 진행 중 — 동일 NodeID 로 복귀 예정.
+    app_log_info("Resuming saved network from NVM3...\n");
+    network_joined   = false;
+    join_in_progress = true;           // resume 워치독 무장 (app_process.c tick)
+  }
+}
+
+static void bootloader_storage_init(void)
+{
+  int32_t ret = bootloader_init();
+  if (ret != BOOTLOADER_OK) {
+    app_log_error("bootloader_init() FAILED: 0x%lX\n", ret);
+    return;
+  }
+  app_log_info("Bootloader interface initialized.\n");
+
+  BootloaderStorageSlot_t slot_info;
+  ret = bootloader_getStorageSlotInfo(0, &slot_info);
+  if (ret == BOOTLOADER_OK) {
+    app_log_info("Storage slot 0: addr=0x%08lX, len=%lu bytes\n",
+                 slot_info.address, slot_info.length);
+  } else {
+    app_log_error("Failed to get slot 0 info: 0x%lX\n", ret);
+  }
+}

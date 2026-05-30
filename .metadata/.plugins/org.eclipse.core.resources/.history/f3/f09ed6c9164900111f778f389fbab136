@@ -1,0 +1,444 @@
+/***************************************************************************//**
+ * @file
+ * @brief app_process.c — Slave (Sensor / OTA Client) — Automated OTA
+ *
+ * ╔══════════════════════════════════════════════════════════════════╗
+ * ║  [확장성 — Slave 4개 운용 시 각 보드별 변경 필요 항목]         ║
+ * ║                                                                ║
+ * ║  1. SENSOR_REPORT_INTERVAL_MS → Slave별 리포트 주기 조정 가능  ║
+ * ║  2. 센서 데이터 소스          → 보드별 센서 연결에 따라 변경   ║
+ * ║  3. 나머지는 모든 Slave 동일 코드로 동작                       ║
+ * ╚══════════════════════════════════════════════════════════════════╝
+ *******************************************************************************
+ * SPDX-License-Identifier: Zlib
+ ******************************************************************************/
+
+// -----------------------------------------------------------------------------
+//                                   Includes
+// -----------------------------------------------------------------------------
+#include PLATFORM_HEADER
+#include "stack/include/ember.h"
+#include "em_chip.h"
+#include "app_log.h"
+#include "sl_app_common.h"
+#include "app_framework_common.h"
+#include "sl_simple_led_instances.h"
+#include "app_process.h"
+#include <stdlib.h>
+#include <string.h>
+#include "sl_sleeptimer.h"
+
+// Gecko Bootloader Application Interface
+#include "btl_interface.h"
+#include "btl_interface_storage.h"
+
+// OTA Unicast Client API
+// (Simplicity Studio에서 OTA Unicast Bootloader Client 컴포넌트 추가 필수)
+#include "ota-unicast-bootloader-client.h"
+
+// -----------------------------------------------------------------------------
+//                              Macros and Typedefs
+// -----------------------------------------------------------------------------
+
+/// Master → Slave 커스텀 메시지 (Master의 app_process.c와 동일 값)
+#define CUSTOM_MSG_PREPARE_OTA   0xF0
+#define CUSTOM_MSG_PREPARE_ACK   0xF1
+#define CUSTOM_ENDPOINT          0x02
+
+/// Join 재시도 타이밍
+#define JOIN_RETRY_INTERVAL_MS   5000
+
+// ╔══════════════════════════════════════════════════════════════════╗
+// ║ [확장성] Slave별 센서 리포트 주기를 다르게 할 수 있음          ║
+// ║ Slave 1: 1000ms, Slave 2: 2000ms 등                           ║
+// ╚══════════════════════════════════════════════════════════════════╝
+#define SENSOR_REPORT_INTERVAL_MS  1000
+
+// -----------------------------------------------------------------------------
+//                          Static Function Declarations
+// -----------------------------------------------------------------------------
+static void handle_ota_prepare_msg(EmberIncomingMessage *message);
+static void send_prepare_ack(EmberNodeId master_node);
+static void try_rejoin(void);
+
+// -----------------------------------------------------------------------------
+//                                Global Variables
+// -----------------------------------------------------------------------------
+/// TX options (Master와 동일)
+EmberMessageOptions tx_options = EMBER_OPTIONS_ACK_REQUESTED | EMBER_OPTIONS_SECURITY_ENABLED;
+
+/// app_init.c에서 선언
+extern volatile bool network_joined;
+extern volatile bool join_in_progress;
+
+// -----------------------------------------------------------------------------
+//                                Static Variables
+// -----------------------------------------------------------------------------
+/// OTA 상태
+static bool     ota_prepare_done = false;
+static uint8_t  ota_expected_tag = 0;
+static uint32_t ota_expected_size = 0;
+
+/// Join 재시도 타이머
+static uint32_t join_retry_timer = 0;
+
+/// 센서 리포트 타이머
+static uint32_t sensor_report_timer = 0;
+
+// -----------------------------------------------------------------------------
+//                          Public Function Definitions
+// -----------------------------------------------------------------------------
+
+/**************************************************************************//**
+ * Incoming message callback
+ *
+ * ╔══════════════════════════════════════════════════════════════════╗
+ * ║ 두 가지 메시지를 처리:                                        ║
+ * ║ 1. CUSTOM_ENDPOINT (0x02) → Master의 OTA 준비 명령           ║
+ * ║ 2. SL_SENSOR_SINK_ENDPOINT → 일반 데이터 (Slave→Master 응답) ║
+ * ╚══════════════════════════════════════════════════════════════════╝
+ *****************************************************************************/
+void emberAfIncomingMessageCallback(EmberIncomingMessage *message)
+{
+  // ─── Master로부터 OTA 준비 명령 수신 ───
+  if (message->endpoint == CUSTOM_ENDPOINT
+      && message->length >= 1
+      && message->payload[0] == CUSTOM_MSG_PREPARE_OTA) {
+    handle_ota_prepare_msg(message);
+    return;
+  }
+
+  // ─── 기타 메시지 처리 (필요시 추가) ───
+  app_log_info("RX from 0x%04X: ep=%d, len=%d\n",
+               message->source, message->endpoint, message->length);
+}
+
+/**************************************************************************//**
+ * Message sent callback
+ *****************************************************************************/
+void emberAfMessageSentCallback(EmberStatus status,
+                                EmberOutgoingMessage *message)
+{
+  (void) message;
+  if (status != EMBER_SUCCESS) {
+    app_log_info("TX: 0x%02X\n", status);
+  }
+}
+
+/**************************************************************************//**
+ * Stack status callback — 네트워크 상태 변화 처리
+ *
+ * ╔══════════════════════════════════════════════════════════════════╗
+ * ║ 핵심: EMBER_NETWORK_UP 수신 시 network_joined = true          ║
+ * ║       EMBER_NETWORK_DOWN 시 자동 재접속 시도                  ║
+ * ║ OTA 후 리부트 → NVM 복원 → EMBER_NETWORK_UP 자동 발생        ║
+ * ╚══════════════════════════════════════════════════════════════════╝
+ *****************************************************************************/
+void emberAfStackStatusCallback(EmberStatus status)
+{
+  switch (status) {
+    case EMBER_NETWORK_UP:
+      app_log_info("Network UP. NodeID=0x%04X\n", emberGetNodeId());
+      network_joined = true;
+      join_in_progress = false;
+      break;
+
+    case EMBER_NETWORK_DOWN:
+      app_log_info("Network DOWN.\n");
+      network_joined = false;
+      join_in_progress = false;
+      // 자동 재접속 타이머 시작
+      join_retry_timer = sl_sleeptimer_get_tick_count();
+      break;
+
+    default:
+      app_log_info("Stack status: 0x%02X\n", status);
+      break;
+  }
+}
+
+/**************************************************************************//**
+ * Tick callback — 메인 루프
+ *****************************************************************************/
+void emberAfTickCallback(void)
+{
+  // ── LED: 네트워크 상태 표시 ──
+  if (emberStackIsUp()) {
+    sl_led_turn_on(&sl_led_led0);
+  } else {
+    sl_led_turn_off(&sl_led_led0);
+  }
+
+  // ── 네트워크 미접속 시 자동 재접속 ──
+  if (!network_joined && !join_in_progress) {
+    uint32_t elapsed = sl_sleeptimer_tick_to_ms(
+                         sl_sleeptimer_get_tick_count() - join_retry_timer);
+    if (elapsed > JOIN_RETRY_INTERVAL_MS) {
+      app_log_info("Retrying join...\n");
+      try_rejoin();
+      join_retry_timer = sl_sleeptimer_get_tick_count();
+    }
+  }
+
+  // ╔══════════════════════════════════════════════════════════════════╗
+  // ║ [확장성] 센서 데이터 주기 전송 — Slave별 센서에 맞게 수정     ║
+  // ║ 현재는 기본 sensor-sink 동작 유지.                            ║
+  // ║ 실제 큐브위성 센서(온도, 자이로 등)에 맞게 교체 필요.         ║
+  // ╚══════════════════════════════════════════════════════════════════╝
+  // (기존 센서 리포트 로직은 sl_sensor_sink 컴포넌트에서 처리)
+}
+
+/**************************************************************************//**
+ * [OTA Client Callback] 새 이미지 수신 시작 알림
+ *
+ * Master가 distribution을 시작하면 호출됨.
+ * TRUE 반환 → 수신 수락, FALSE → 거부.
+ *
+ * ╔══════════════════════════════════════════════════════════════════╗
+ * ║ [확장성] imageTag로 이 Slave용 펌웨어인지 구분 가능:          ║
+ * ║   0xAA = 공통 펌웨어 (모든 Slave)                             ║
+ * ║   0x01 = Slave 1 전용                                         ║
+ * ║   0x02 = Slave 2 전용                                         ║
+ * ║   0x03 = Slave 3 전용                                         ║
+ * ║   0x04 = Slave 4 전용                                         ║
+ * ║ 지금은 모든 tag를 수락. 필요시 필터링 추가.                    ║
+ * ╚══════════════════════════════════════════════════════════════════╝
+ *****************************************************************************/
+bool emberAfPluginOtaUnicastBootloaderClientNewIncomingImageCallback(
+  EmberNodeId serverId,
+  uint8_t imageTag,
+  uint32_t imageSize,
+  uint32_t *startIndex)
+{
+  app_log_info("OTA: New image from server 0x%04X, tag=0x%02X, size=%lu\n",
+               serverId, imageTag, imageSize);
+
+  // ╔═══════════════════════════════════════════════════╗
+  // ║ [확장성] tag 필터링 예시 (필요시 활성화):        ║
+  // ║ if (imageTag != MY_SLAVE_TAG                     ║
+  // ║     && imageTag != 0xAA) {                       ║
+  // ║   app_log_info("Tag mismatch, rejecting.\n");    ║
+  // ║   return false;                                  ║
+  // ║ }                                                ║
+  // ╚═══════════════════════════════════════════════════╝
+
+  ota_expected_tag  = imageTag;
+  ota_expected_size = imageSize;
+
+  // startIndex를 0으로 설정 → 처음부터 수신
+  // resume 기능 사용 시 bootloader에서 마지막 offset 읽어서 설정 가능
+  *startIndex = 0;
+
+  return true;  // 수신 수락
+}
+
+/**************************************************************************//**
+ * [OTA Client Callback] 이미지 세그먼트 수신
+ *
+ * 수신된 세그먼트를 bootloader storage slot 0에 기록.
+ *****************************************************************************/
+void emberAfPluginOtaUnicastBootloaderClientIncomingImageSegmentCallback(
+  EmberNodeId serverId,
+  uint32_t startIndex,
+  uint32_t endIndex,
+  uint8_t imageTag,
+  uint8_t *imageSegment)
+{
+  (void)serverId;
+  (void)imageTag;
+
+  uint32_t len = endIndex - startIndex + 1;
+
+  int32_t ret = bootloader_writeStorage(0, startIndex, imageSegment, len);
+  if (ret != BOOTLOADER_OK) {
+    app_log_error("OTA: writeStorage FAIL at %lu: 0x%lX\n", startIndex, ret);
+  }
+}
+
+/**************************************************************************//**
+ * [OTA Client Callback] 이미지 다운로드 완료
+ *****************************************************************************/
+void emberAfPluginOtaUnicastBootloaderClientImageDownloadCompleteCallback(
+  EmberAfOtaUnicastBootloaderStatus status,
+  uint8_t imageTag,
+  uint32_t imageSize)
+{
+  if (status == EMBER_OTA_UNICAST_BOOTLOADER_STATUS_SUCCESS) {
+    app_log_info("OTA: Download COMPLETE. tag=0x%02X, size=%lu\n",
+                 imageTag, imageSize);
+
+    // 이미지 검증 (선택사항이지만 권장)
+    // bootloader_verifyImage() 사용 가능
+
+    // 부트로드할 이미지 지정
+    int32_t ret = bootloader_setImageToBootload(0);
+    if (ret == BOOTLOADER_OK) {
+      app_log_info("OTA: Image set to bootload from slot 0.\n");
+    } else {
+      app_log_error("OTA: setImageToBootload FAIL: 0x%lX\n", ret);
+    }
+  } else {
+    app_log_error("OTA: Download FAILED, status=0x%02X\n", status);
+  }
+}
+
+/**************************************************************************//**
+ * [OTA Client Callback] 서버로부터 부트로드 요청 수신
+ *
+ * Master가 bootload를 요청하면 호출됨.
+ * TRUE 반환 → 부트로드 수락 (delay 후 재부팅)
+ * FALSE → 거부
+ *
+ * ╔══════════════════════════════════════════════════════════════════╗
+ * ║ TRUE 반환 후 delay(Master가 설정한 2000ms) 경과 시            ║
+ * ║ bootloader_rebootAndInstall() 자동 실행됨 (플러그인 내부)     ║
+ * ║ → 재부팅 → 새 펌웨어 적용                                    ║
+ * ║ → emberNetworkInit() → NVM 복원 → 자동 재접속                ║
+ * ╚══════════════════════════════════════════════════════════════════╝
+ *****************************************************************************/
+bool emberAfPluginOtaUnicastBootloaderClientBootloadRequestCallback(
+  uint8_t imageTag,
+  uint32_t firmwareTag,
+  EmberNodeId serverId)
+{
+  (void)firmwareTag;
+
+  app_log_info("OTA: Bootload request from 0x%04X, tag=0x%02X. ACCEPTING.\n",
+               serverId, imageTag);
+
+  // 부트로드 수락 → delay 후 자동 재부팅
+  return true;
+}
+
+/**************************************************************************//**
+ * Frequency hopping callback
+ *****************************************************************************/
+void emberAfFrequencyHoppingStartClientCompleteCallback(EmberStatus status)
+{
+  if (status != EMBER_SUCCESS) {
+    app_log_error("FH Client sync failed: 0x%02X\n", status);
+  } else {
+    app_log_info("FH Client Sync Success\n");
+  }
+}
+
+/**************************************************************************//**
+ * Energy scan callback
+ *****************************************************************************/
+void emberAfEnergyScanCompleteCallback(int8_t mean, int8_t min,
+                                       int8_t max, uint16_t variance)
+{
+  app_log_info("Energy scan: mean=%d min=%d max=%d var=%d\n",
+               mean, min, max, variance);
+}
+
+// -----------------------------------------------------------------------------
+//                          Static Function Definitions
+// -----------------------------------------------------------------------------
+
+/**************************************************************************//**
+ * Master의 CUSTOM_MSG_PREPARE_OTA 메시지 처리
+ *
+ * 수신 즉시:
+ *   1. Bootloader slot 0 erase
+ *   2. Master에 ACK 응답
+ *
+ * Payload: [0xF0(1B)] [image_tag(1B)] [image_size(4B LE)]
+ *****************************************************************************/
+static void handle_ota_prepare_msg(EmberIncomingMessage *message)
+{
+  if (message->length < 6) {
+    app_log_error("OTA prepare msg too short: %d\n", message->length);
+    return;
+  }
+
+  uint8_t  tag  = message->payload[1];
+  uint32_t size = (uint32_t)message->payload[2]
+                | ((uint32_t)message->payload[3] << 8)
+                | ((uint32_t)message->payload[4] << 16)
+                | ((uint32_t)message->payload[5] << 24);
+
+  app_log_info("OTA PREPARE from 0x%04X: tag=0x%02X, size=%lu\n",
+               message->source, tag, size);
+
+  ota_expected_tag  = tag;
+  ota_expected_size = size;
+
+  // ── Bootloader slot 0 erase ──
+  app_log_info("Erasing slot 0...\n");
+  int32_t ret = bootloader_eraseStorageSlot(0);
+  if (ret != BOOTLOADER_OK) {
+    app_log_error("Slot erase FAILED: 0x%lX\n", ret);
+    return;
+  }
+  app_log_info("Slot 0 erased. Ready for OTA.\n");
+  ota_prepare_done = true;
+
+  // ── Master에 ACK 응답 ──
+  send_prepare_ack(message->source);
+}
+
+/**************************************************************************//**
+ * Master에 OTA 준비 완료 ACK 전송
+ *****************************************************************************/
+static void send_prepare_ack(EmberNodeId master_node)
+{
+  uint8_t msg[1] = { CUSTOM_MSG_PREPARE_ACK };
+
+  EmberStatus status = emberMessageSend(master_node,
+                                         CUSTOM_ENDPOINT,
+                                         0,
+                                         sizeof(msg),
+                                         msg,
+                                         tx_options);
+  if (status == EMBER_SUCCESS) {
+    app_log_info("Prepare ACK sent to 0x%04X.\n", master_node);
+  } else {
+    app_log_error("Prepare ACK send FAILED: 0x%02X\n", status);
+  }
+}
+
+/**************************************************************************//**
+ * 네트워크 재접속 시도
+ *****************************************************************************/
+static void try_rejoin(void)
+{
+  EmberNetworkParameters params;
+  memset(&params, 0, sizeof(params));
+  params.radioChannel = 0;     // Master와 동일
+  params.radioTxPower = 0;
+  params.panId        = 0xFFFF;
+
+  EmberStatus status = emberJoinNetwork(EMBER_STAR_END_DEVICE, &params);
+
+  if (status == EMBER_SUCCESS) {
+    join_in_progress = true;
+    app_log_info("Rejoin initiated.\n");
+  } else {
+    app_log_error("Rejoin FAILED: 0x%02X\n", status);
+  }
+}
+
+// -----------------------------------------------------------------------------
+//                     RTOS Task (필요시 사용)
+// -----------------------------------------------------------------------------
+#if defined(EMBER_AF_PLUGIN_MICRIUM_RTOS) && defined(EMBER_AF_PLUGIN_MICRIUM_RTOS_APP_TASK1)
+void emberAfPluginMicriumRtosAppTask1InitCallback(void)
+{
+  app_log_info("app task init\n");
+}
+
+#include <kernel/include/os.h>
+#define TICK_INTERVAL_MS 1000
+
+void emberAfPluginMicriumRtosAppTask1MainLoopCallback(void *p_arg)
+{
+  RTOS_ERR err;
+  OS_TICK yield_time_ticks = (OSCfg_TickRate_Hz * TICK_INTERVAL_MS) / 1000;
+
+  while (true) {
+    app_log_info("app task tick\n");
+    OSTimeDly(yield_time_ticks, OS_OPT_TIME_DLY, &err);
+  }
+}
+#endif

@@ -1,0 +1,13 @@
+21:01:56 **** Incremental Build of configuration GNU ARM v12.2.1 - Default for project bootloader-storage-spiflash-sfdp-single_IWSB ****
+make -j16 all 
+make[1]: 'main-build'을(를) 위해 할 일이 없습니다.
+"/home/lmh/SimplicityStudio_v5/developer/adapter_packs/commander/commander" postbuild "/home/lmh/SimplicityStudio/v5_workspace/bootloader-storage-spiflash-sfdp-single_IWSB/bootloader-storage-spiflash-sfdp-single_IWSB.slpb" --parameter build_dir:"/home/lmh/SimplicityStudio/v5_workspace/bootloader-storage-spiflash-sfdp-single_IWSB/GNU ARM v12.2.1 - Default"
+Parsing file /home/lmh/SimplicityStudio/v5_workspace/bootloader-storage-spiflash-sfdp-single_IWSB/bootloader-storage-spiflash-sfdp-single_IWSB.slpb...
+Running task convert...
+Running task convert...
+Running task convert...
+DONE
+ 
+
+21:01:57 Build Finished. 0 errors, 0 warnings. (took 340ms)
+

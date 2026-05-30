@@ -1,0 +1,118 @@
+#include "em_i2c.h"
+#include "btl_interface.h"
+#include "btl_interface_storage.h"
+#include "app_i2c_dfu.h"
+#include "app_log.h"
+
+static uint32_t flash_offset = 0;
+
+void I2C0_IRQHandler(void)
+{
+    int status = I2C0->IF;
+
+    if (status & I2C_IF_ADDR) {
+        i2c_rx_len = 0;
+        I2C0->RXDATA;
+        I2C_IntClear(I2C0, I2C_IFC_ADDR);
+    } else if (status & I2C_IF_RXDATAV) {
+        if (i2c_rx_len < I2C_RX_BUF_SIZE)
+            i2c_rx_buf[i2c_rx_len++] = (uint8_t)I2C0->RXDATA;
+    }
+
+    if (status & I2C_IF_SSTOP) {
+        I2C_IntClear(I2C0, I2C_IFC_SSTOP);
+        if (i2c_rx_len > 0)
+            i2c_pkt_ready = true;
+    }
+}
+
+static uint8_t crc8_calc(const uint8_t *data, uint16_t len)
+{
+    uint8_t crc = 0x00;
+    for (uint16_t i = 0; i < len; i++) {
+        crc ^= data[i];
+        for (int j = 0; j < 8; j++)
+            crc = (crc & 0x80) ? ((crc << 1) ^ 0x07) : (crc << 1);
+    }
+    return crc;
+}
+
+void app_process_action(void)
+{
+    if (!i2c_pkt_ready) return;
+    i2c_pkt_ready = false;
+
+    if (i2c_rx_len == 1) {
+        app_log_info("[I2C] Received: 0x%02X (%d)\n",
+                     i2c_rx_buf[0], i2c_rx_buf[0]);
+        return;
+    }
+
+    if (i2c_rx_len < 4) {
+        app_log_error("[ERR] Packet too short: %d bytes\n", i2c_rx_len);
+        dfu_state = DFU_ERROR;
+        return;
+    }
+
+    uint8_t  cmd     = i2c_rx_buf[0];
+    uint16_t len     = ((uint16_t)i2c_rx_buf[1] << 8) | i2c_rx_buf[2];
+    uint8_t *payload = (uint8_t *)&i2c_rx_buf[3];
+    uint8_t  rx_crc  = i2c_rx_buf[3 + len];
+
+    if (crc8_calc((uint8_t *)i2c_rx_buf, 3 + len) != rx_crc) {
+        app_log_error("[ERR] CRC mismatch\n");
+        dfu_state = DFU_ERROR;
+        return;
+    }
+
+    int32_t ret;
+    switch (cmd) {
+        case CMD_ERASE:
+            ret = bootloader_eraseStorageSlot(0);
+            flash_offset = 0;
+            dfu_state = (ret == BOOTLOADER_OK) ? DFU_RECEIVING : DFU_ERROR;
+            app_log_info("[DFU] ERASE %s\n", (ret == BOOTLOADER_OK) ? "OK" : "FAIL");
+            break;
+
+        case CMD_DATA:
+            if (dfu_state != DFU_RECEIVING) {
+                app_log_error("[ERR] Not in RECEIVING state\n");
+                dfu_state = DFU_ERROR; break;
+            }
+            if (flash_offset + len > SLOT_SIZE) {
+                app_log_error("[ERR] Exceeds slot size\n");
+                dfu_state = DFU_ERROR; break;
+            }
+            ret = bootloader_writeStorage(0, flash_offset, payload, len);
+            if (ret == BOOTLOADER_OK) {
+                flash_offset += len;
+                app_log_info("[DFU] DATA offset=%lu len=%u\n", flash_offset, len);
+            } else {
+                app_log_error("[DFU] DATA FAIL ret=%ld\n", ret);
+                dfu_state = DFU_ERROR;
+            }
+            break;
+
+        case CMD_VERIFY:
+            app_log_info("[DFU] Transfer complete. Total=%lu bytes\n", flash_offset);
+            ret = bootloader_verifyImage(0, NULL);
+            dfu_state = (ret == BOOTLOADER_OK) ? DFU_VERIFIED : DFU_ERROR;
+            app_log_info("[DFU] VERIFY %s\n", (ret == BOOTLOADER_OK) ? "OK" : "FAIL");
+            break;
+
+        case CMD_REBOOT:
+            if (dfu_state == DFU_VERIFIED) {
+                app_log_info("[DFU] REBOOT\n");
+                bootloader_setImageToBootload(0);
+                bootloader_rebootAndInstall();
+            } else {
+                app_log_error("[ERR] REBOOT rejected, not verified\n");
+            }
+            break;
+
+        default:
+            app_log_error("[ERR] Unknown CMDD: 0x%02X\n", cmd);
+            dfu_state = DFU_ERROR;
+            break;
+    }
+}

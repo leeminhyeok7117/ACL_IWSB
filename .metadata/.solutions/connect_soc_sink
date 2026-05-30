@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="ASCII"?>
+<MSolutions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.silabs.com/ss/Solution.ecore">
+  <solution name="connect_soc_sink" label="connect_soc_sink">
+    <SolutionModuleReferences id="slc.workspace.data"/>
+    <property key="solution.activeDebugGroup" value="Default"/>
+    <project builtin="true" name="cubesat_TX" location="../../cubesat_TX"/>
+    <configuration name="Default">
+      <project builtin="true" name="cubesat_TX"/>
+    </configuration>
+    <SDMDefinition id="slc.workspace.data">
+      <project name="cubesat_TX" location="/home/lmh/SimplicityStudio/v5_workspace/cubesat_TX/."/>
+    </SDMDefinition>
+  </solution>
+</MSolutions>

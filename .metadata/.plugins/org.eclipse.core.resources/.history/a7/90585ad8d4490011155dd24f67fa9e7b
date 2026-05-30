@@ -1,0 +1,213 @@
+/***************************************************************************//**
+ * @file
+ * @brief app_init.c — Slave (Sensor / OTA Client) — Automated OTA + Sweep TX
+ *
+ * 초기화 항목:
+ *   1. PSA Crypto 보안키 설정
+ *   2. Connect 네트워크 자동 Join
+ *   3. Bootloader Storage 초기화 (OTA Client용)
+ *
+ * NOTE: Slave는 AP_OBC와 직접 통신하지 않으므로 I2C 없음.
+ *       모든 명령은 Master로부터 Connect 메시지로 수신.
+ *******************************************************************************
+ * SPDX-License-Identifier: Zlib
+ ******************************************************************************/
+
+// -----------------------------------------------------------------------------
+//                                   Includes
+// -----------------------------------------------------------------------------
+#include "app_log.h"
+#include "sl_app_common.h"
+#include "stack/include/ember.h"
+#include "app_process.h"
+#include "app_init.h"
+#include "app_framework_common.h"
+// PSA Crypto
+#include "psa/crypto.h"
+#include "mbedtls/build_info.h"
+// Gecko Bootloader Application Interface
+#include "btl_interface.h"
+#include "btl_interface_storage.h"
+#include <string.h>
+
+// -----------------------------------------------------------------------------
+//                              Macros and Typedefs
+// -----------------------------------------------------------------------------
+#define PSA_AES_KEY_ID            1
+
+// ─── 네트워크 자동 설정 파라미터 ───
+// Master의 채널과 동일해야 Join 가능.
+// PAN ID 0xFFFF = 와일드카드 (Master가 form한 PAN 아무거나 Join)
+#define SLAVE_NETWORK_CHANNEL     0       // Master와 동일
+#define SLAVE_NETWORK_PAN_ID      0xFFFF  // 와일드카드 (자동 검색)
+#define SLAVE_TX_POWER            0       // dBm
+
+// Join 재시도 간격 (네트워크 미연결 시)
+#define JOIN_RETRY_INTERVAL_MS    5000
+
+// -----------------------------------------------------------------------------
+//                          Static Function Declarations
+// -----------------------------------------------------------------------------
+static void bootloader_storage_init(void);
+void network_join(void);  // app_process.c에서 재시도 시 호출
+
+// -----------------------------------------------------------------------------
+//                                Global Variables
+// -----------------------------------------------------------------------------
+extern EmberKeyData security_key;
+extern psa_key_id_t security_key_id;
+
+/// OTA Slave 상태 (app_process.c에서 참조)
+volatile ota_slave_state_t ota_slave_state = OTA_SLAVE_IDLE;
+
+/// Sweep TX 상태 (app_process.c에서 참조)
+volatile sweep_tx_state_t sweep_state = SWEEP_IDLE;
+
+/// Join 재시도용 (app_process.c의 tick에서 참조)
+uint32_t join_retry_tick = 0;
+bool     network_joined  = false;
+
+// -----------------------------------------------------------------------------
+//                          Public Function Definitions
+// -----------------------------------------------------------------------------
+
+/******************************************************************************
+ * Application framework init callback
+ ******************************************************************************/
+void emberAfInitCallback(void)
+{
+  EmberStatus em_status = EMBER_ERR_FATAL;
+
+  // PSA Crypto 초기화
+  psa_crypto_init();
+
+  app_log_info("\n=== Slave (Sensor / OTA Client) — Sweep TX ===\n");
+
+  // ─── 1. Security Key 설정 (Master와 동일 로직) ───
+  security_key_id = PSA_AES_KEY_ID;
+  psa_key_attributes_t key_attr = psa_key_attributes_init();
+  psa_status_t psa_status = psa_get_key_attributes(security_key_id, &key_attr);
+  if (psa_status == PSA_ERROR_INVALID_HANDLE) {
+    app_log_info("No PSA AES key found, creating one.\n");
+    psa_set_key_id(&key_attr, security_key_id);
+    psa_set_key_algorithm(&key_attr, PSA_ALG_ECB_NO_PADDING);
+    psa_set_key_usage_flags(&key_attr, PSA_KEY_USAGE_ENCRYPT | PSA_KEY_USAGE_DECRYPT);
+    psa_set_key_type(&key_attr, PSA_KEY_TYPE_AES);
+    psa_set_key_bits(&key_attr, 128);
+
+#ifdef PSA_KEY_LOCATION_SLI_SE_OPAQUE
+    psa_set_key_lifetime(&key_attr,
+                         PSA_KEY_LIFETIME_FROM_PERSISTENCE_AND_LOCATION(
+                           PSA_KEY_LIFETIME_PERSISTENT,
+                           PSA_KEY_LOCATION_SLI_SE_OPAQUE));
+#else
+#ifdef MBEDTLS_PSA_CRYPTO_STORAGE_C
+    psa_set_key_lifetime(&key_attr,
+                         PSA_KEY_LIFETIME_FROM_PERSISTENCE_AND_LOCATION(
+                           PSA_KEY_LIFETIME_PERSISTENT,
+                           PSA_KEY_LOCATION_LOCAL_STORAGE));
+#else
+    psa_set_key_lifetime(&key_attr,
+                         PSA_KEY_LIFETIME_FROM_PERSISTENCE_AND_LOCATION(
+                           PSA_KEY_LIFETIME_VOLATILE,
+                           PSA_KEY_LOCATION_LOCAL_STORAGE));
+#endif
+#endif
+
+    psa_status = psa_import_key(&key_attr,
+                                security_key.contents,
+                                (size_t)EMBER_ENCRYPTION_KEY_SIZE,
+                                &security_key_id);
+
+    if (psa_status == PSA_SUCCESS) {
+      app_log_info("Security key import OK, id: %lu\n", security_key_id);
+    } else {
+      app_log_info("Security key import FAIL: %d\n", psa_status);
+    }
+  } else {
+    app_log_info("PSA AES key exists, reusing.\n");
+  }
+
+  em_status = emberSetPsaSecurityKey(security_key_id);
+  (void)em_status;
+
+  // ─── 2. Network Join ───
+  // emberNetworkInit()으로 NVM에 저장된 이전 네트워크 복원 시도.
+  // 실패 시 emberJoinNetwork()로 새로 Join.
+  em_status = emberNetworkInit();
+  app_log_info("emberNetworkInit: 0x%02X\n", em_status);
+
+  if (em_status == EMBER_NOT_JOINED) {
+    network_join();
+  } else if (em_status == EMBER_SUCCESS) {
+    network_joined = true;
+    app_log_info("Previous network restored.\n");
+  }
+
+  // ─── 3. Bootloader Storage 초기화 (OTA Client 수신용) ───
+  bootloader_storage_init();
+
+  // ─── 4. 상태 초기화 ───
+  ota_slave_state = OTA_SLAVE_IDLE;
+  sweep_state     = SWEEP_IDLE;
+
+  app_log_info("Slave init complete.\n");
+
+#if defined(EMBER_AF_PLUGIN_BLE)
+  bleConnectionInfoTableInit();
+#endif
+}
+
+// -----------------------------------------------------------------------------
+//                          Static Function Definitions
+// -----------------------------------------------------------------------------
+
+/******************************************************************************
+ * Bootloader Storage 초기화
+ ******************************************************************************/
+static void bootloader_storage_init(void)
+{
+  int32_t ret = bootloader_init();
+  if (ret != BOOTLOADER_OK) {
+    app_log_error("bootloader_init() FAILED: 0x%lX\n", ret);
+    return;
+  }
+  app_log_info("Bootloader interface initialized.\n");
+
+  BootloaderStorageSlot_t slot_info;
+  ret = bootloader_getStorageSlotInfo(0, &slot_info);
+  if (ret == BOOTLOADER_OK) {
+    app_log_info("Storage slot 0: addr=0x%08lX, len=%lu bytes\n",
+                 slot_info.address, slot_info.length);
+  } else {
+    app_log_error("Failed to get slot 0 info: 0x%lX\n", ret);
+  }
+}
+
+/******************************************************************************
+ * 네트워크 Join 시도
+ *
+ * Star 토폴로지에서 EMBER_STAR_END_DEVICE로 Join.
+ * Master가 form한 네트워크에 자동으로 합류.
+ *
+ * NOTE: Join 실패 시 emberAfStackStatusCallback()에서
+ *       EMBER_NETWORK_DOWN 수신 → emberAfTickCallback()에서
+ *       JOIN_RETRY_INTERVAL_MS 후 재시도.
+ ******************************************************************************/
+void network_join(void)
+{
+  EmberNetworkParameters params;
+  memset(&params, 0, sizeof(params));
+  params.radioChannel = SLAVE_NETWORK_CHANNEL;
+  params.panId        = SLAVE_NETWORK_PAN_ID;
+  params.radioTxPower = SLAVE_TX_POWER;
+
+  EmberStatus em_status = emberJoinNetwork(EMBER_STAR_END_DEVICE, &params);
+
+  if (em_status == EMBER_SUCCESS) {
+    app_log_info("Join request sent on ch=%d\n", params.radioChannel);
+  } else {
+    app_log_error("emberJoinNetwork FAILED: 0x%02X (will retry)\n", em_status);
+    join_retry_tick = sl_sleeptimer_get_tick_count();
+  }
+}

@@ -1,0 +1,13 @@
+19:46:50 **** Incremental Build of configuration GNU ARM v12.2.1 - Default for project bootloader-storage-internal-single ****
+make -j16 all 
+make[1]: 'main-build'을(를) 위해 할 일이 없습니다.
+"/home/lmh/SimplicityStudio_v5/developer/adapter_packs/commander/commander" postbuild "/home/lmh/SimplicityStudio/v5_workspace/bootloader-storage-internal-single/bootloader-storage-internal-single.slpb" --parameter build_dir:"/home/lmh/SimplicityStudio/v5_workspace/bootloader-storage-internal-single/GNU ARM v12.2.1 - Default"
+Parsing file /home/lmh/SimplicityStudio/v5_workspace/bootloader-storage-internal-single/bootloader-storage-internal-single.slpb...
+Running task convert...
+Running task convert...
+Running task convert...
+DONE
+ 
+
+19:46:51 Build Finished. 0 errors, 0 warnings. (took 294ms)
+

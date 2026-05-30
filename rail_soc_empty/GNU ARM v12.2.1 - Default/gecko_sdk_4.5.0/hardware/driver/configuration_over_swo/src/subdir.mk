@@ -1,0 +1,24 @@
+################################################################################
+# Automatically-generated file. Do not edit!
+################################################################################
+
+# Add inputs and outputs from these tool invocations to the build variables 
+C_SRCS += \
+/home/lmh/SimplicityStudio/SDKs/gecko_sdk/hardware/driver/configuration_over_swo/src/sl_cos.c 
+
+OBJS += \
+./gecko_sdk_4.5.0/hardware/driver/configuration_over_swo/src/sl_cos.o 
+
+C_DEPS += \
+./gecko_sdk_4.5.0/hardware/driver/configuration_over_swo/src/sl_cos.d 
+
+
+# Each subdirectory must supply rules for building sources it contributes
+gecko_sdk_4.5.0/hardware/driver/configuration_over_swo/src/sl_cos.o: /home/lmh/SimplicityStudio/SDKs/gecko_sdk/hardware/driver/configuration_over_swo/src/sl_cos.c gecko_sdk_4.5.0/hardware/driver/configuration_over_swo/src/subdir.mk
+	@echo 'Building file: $<'
+	@echo 'Invoking: GNU ARM C Compiler'
+	arm-none-eabi-gcc -g -gdwarf-2 -mcpu=cortex-m4 -mthumb -std=c99 '-DEFR32FG12P433F1024GL125=1' '-DSL_BOARD_NAME="BRD4253A"' '-DSL_BOARD_REV="A03"' '-DHARDWARE_BOARD_DEFAULT_RF_BAND_915=1' '-DHARDWARE_BOARD_SUPPORTS_2_RF_BANDS=1' '-DHARDWARE_BOARD_SUPPORTS_RF_BAND_2400=1' '-DHARDWARE_BOARD_SUPPORTS_RF_BAND_915=1' '-DHFXO_FREQ=38400000' '-DSL_COMPONENT_CATALOG_PRESENT=1' '-DSL_RAIL_LIB_MULTIPROTOCOL_SUPPORT=0' '-DSL_RAIL_UTIL_PA_CONFIG_HEADER=<sl_rail_util_pa_config.h>' -I"/home/lmh/SimplicityStudio/v5_workspace/rail_soc_empty/config" -I"/home/lmh/SimplicityStudio/v5_workspace/rail_soc_empty/config/rail" -I"/home/lmh/SimplicityStudio/v5_workspace/rail_soc_empty/autogen" -I"/home/lmh/SimplicityStudio/v5_workspace/rail_soc_empty" -I"/home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/Device/SiliconLabs/EFR32FG12P/Include" -I"/home/lmh/SimplicityStudio/SDKs/gecko_sdk//hardware/board/inc" -I"/home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/CMSIS/Core/Include" -I"/home/lmh/SimplicityStudio/SDKs/gecko_sdk//hardware/driver/configuration_over_swo/inc" -I"/home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/driver/debug/inc" -I"/home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/device_init/inc" -I"/home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc" -I"/home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc" -I"/home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/mpu/inc" -I"/home/lmh/SimplicityStudio/SDKs/gecko_sdk//hardware/driver/mx25_flash_shutdown/inc/sl_mx25_flash_shutdown_usart" -I"/home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/radio/rail_lib/common" -I"/home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/radio/rail_lib/protocol/ble" -I"/home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/radio/rail_lib/protocol/ieee802154" -I"/home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/radio/rail_lib/protocol/wmbus" -I"/home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/radio/rail_lib/protocol/zwave" -I"/home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/radio/rail_lib/chip/efr32/efr32xg1x" -I"/home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/radio/rail_lib/protocol/sidewalk" -I"/home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/radio/rail_lib/plugin/rail_util_callbacks" -I"/home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/radio/rail_lib/plugin/pa-conversions" -I"/home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/radio/rail_lib/plugin/pa-conversions/efr32xg1x" -I"/home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/radio/rail_lib/plugin/rail_util_protocol" -I"/home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/radio/rail_lib/plugin/rail_util_pti" -I"/home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/radio/rail_lib/plugin/rail_util_rssi" -I"/home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/toolchain/inc" -I"/home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/system/inc" -I"/home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/udelay/inc" -Og -Wall -Wextra -ffunction-sections -fdata-sections -imacrossl_gcc_preinclude.h -mfpu=fpv4-sp-d16 -mfloat-abi=softfp --specs=nano.specs -c -fmessage-length=0 -MMD -MP -MF"gecko_sdk_4.5.0/hardware/driver/configuration_over_swo/src/sl_cos.d" -MT"$@" -o "$@" "$<"
+	@echo 'Finished building: $<'
+	@echo ' '
+
+

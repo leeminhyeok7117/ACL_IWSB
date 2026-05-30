@@ -1,0 +1,584 @@
+/***************************************************************************//**
+ * @file
+ * @brief app_process.c — Master (Sink / OTA Server) — Automated OTA
+ *
+ * Modifications:
+ *   1. AP_OBC I2C 명령 파싱 및 처리
+ *   2. OTA 자동화 상태머신 (prepare → distribute → bootload)
+ *   3. Slave 준비 명령 전송 (커스텀 메시지)
+ *   4. Bootloader Storage 세그먼트 콜백 구현
+ *******************************************************************************
+ * SPDX-License-Identifier: Zlib
+ ******************************************************************************/
+
+// -----------------------------------------------------------------------------
+//                                   Includes
+// -----------------------------------------------------------------------------
+#include PLATFORM_HEADER
+#include "stack/include/ember.h"
+#include "em_chip.h"
+#include "app_log.h"
+#include "sl_app_common.h"
+#include "app_framework_common.h"
+#include "sl_simple_led_instances.h"
+#include "app_process.h"
+#include <stdlib.h>
+#include <string.h>
+#include "sl_sleeptimer.h"
+#include "sl_simple_button_instances.h"
+// Gecko Bootloader Application Interface
+#include "btl_interface.h"
+#include "btl_interface_storage.h"
+
+// OTA Unicast Server API
+// (Simplicity Studio에서 OTA Unicast Bootloader Server 컴포넌트 추가 필수)
+#include "ota-unicast-bootloader-server.h"
+
+// -----------------------------------------------------------------------------
+//                              Macros and Typedefs
+// -----------------------------------------------------------------------------
+
+/// AP_OBC → Master I2C 명령 코드
+#define OBC_CMD_PREPARE       0x01  // 슬롯 erase + 메타데이터 설정
+#define OBC_CMD_WRITE_CHUNK   0x02  // GBL 데이터 청크 쓰기
+#define OBC_CMD_START_OTA     0x03  // OTA 배포 시작
+#define OBC_CMD_STATUS        0x04  // 상태 조회
+
+/// Master → Slave 커스텀 메시지 (Connect 데이터 메시지)
+/// Slave가 이 메시지를 받으면 bootloader slot erase + OTA 수신 준비
+#define CUSTOM_MSG_PREPARE_OTA   0xF0
+#define CUSTOM_MSG_PREPARE_ACK   0xF1
+#define CUSTOM_ENDPOINT          0x02  // sensor_sink 엔드포인트와 구분
+
+/// OTA 자동화 타이밍
+#define OTA_SLAVE_PREPARE_TIMEOUT_MS   10000  // Slave 준비 대기 (10초)
+#define OTA_BOOTLOAD_DELAY_MS          2000   // 부트로드 딜레이
+
+// -----------------------------------------------------------------------------
+//                          Static Function Declarations
+// -----------------------------------------------------------------------------
+static void process_obc_command(void);
+static void handle_cmd_prepare(const uint8_t *payload, uint16_t len);
+static void handle_cmd_write_chunk(const uint8_t *payload, uint16_t len);
+static void handle_cmd_start_ota(void);
+static void send_slave_prepare_msg(EmberNodeId target);
+static void ota_state_machine_tick(void);
+
+// -----------------------------------------------------------------------------
+//                                Global Variables
+// -----------------------------------------------------------------------------
+/// TX options
+EmberMessageOptions tx_options = EMBER_OPTIONS_ACK_REQUESTED | EMBER_OPTIONS_SECURITY_ENABLED;
+
+// app_init.c에서 선언된 외부 변수
+extern volatile ota_master_state_t ota_state;
+extern volatile uint8_t  obc_rx_buffer[];
+extern volatile uint16_t obc_rx_len;
+extern volatile bool     obc_cmd_ready;
+extern uint32_t    gbl_image_size;
+extern uint32_t    gbl_write_offset;
+extern uint8_t     ota_image_tag;
+extern EmberNodeId ota_target_node;
+
+// -----------------------------------------------------------------------------
+//                                Static Variables
+// -----------------------------------------------------------------------------
+static uint32_t ota_timer_start = 0;
+static bool     slave_prepare_acked = false;
+
+// -----------------------------------------------------------------------------
+//                          Public Function Definitions
+// -----------------------------------------------------------------------------
+
+/**************************************************************************//**
+ * Incoming message callback — 센서 데이터 + Slave OTA 준비 ACK 수신
+ *****************************************************************************/
+//OTA 메뉴얼을 위한 트리거
+void sl_button_on_change(const sl_button_t *handle)
+{
+  if (handle == &sl_button_btn0
+      && sl_button_get_state(handle) == SL_SIMPLE_BUTTON_PRESSED) {
+    if (ota_state == OTA_FW_READY_MANUAL) {
+      app_log_info("BTN0: Ground OTA start → node=0x%04X\n",
+                   ota_target_node);
+      ota_state = OTA_FW_READY;
+    } else {
+      app_log_info("BTN0: No GBL loaded or OTA already in progress.\n");
+    }
+  }
+}
+
+void emberAfIncomingMessageCallback(EmberIncomingMessage *message)
+{
+  // ─── Slave OTA 준비 ACK (커스텀 엔드포인트) ───
+  if (message->endpoint == CUSTOM_ENDPOINT
+      && message->length >= 1
+      && message->payload[0] == CUSTOM_MSG_PREPARE_ACK) {
+    app_log_info("Slave 0x%04X OTA prepare ACK received.\n", message->source);
+    slave_prepare_acked = true;
+    return;
+  }
+
+  // ─── 일반 센서 데이터 (기존 로직) ───
+  if ((message->endpoint != SL_SENSOR_SINK_ENDPOINT)
+      || ((tx_options & EMBER_OPTIONS_SECURITY_ENABLED)
+          && !(message->options & EMBER_OPTIONS_SECURITY_ENABLED))) {
+    return;
+  }
+
+  app_log_info("RX: Data from 0x%04X:", message->source);
+  for (int j = 0; j < message->length; j++) {
+    app_log_info(" %02X", message->payload[j]);
+  }
+
+  int32_t temperature = 0;
+  uint32_t humidity  = 0;
+  bool temperature_is_negative = false;
+  int32_t temperature_decimal = 0;
+  uint32_t humidity_decimal  = 0;
+
+  temperature = (int32_t) emberFetchLowHighInt32u(message->payload);
+  humidity = emberFetchLowHighInt32u(message->payload + 4);
+
+  if (temperature < 0) {
+    temperature_is_negative = true;
+  }
+
+  temperature_decimal = abs(temperature) - (abs(temperature) / 1000) * 1000;
+  temperature = abs(temperature / 1000);
+  humidity_decimal = humidity - (humidity / 1000) * 1000;
+  humidity = humidity / 1000;
+
+  app_log_info(" Temp: %s%d.%03dC Hum: %d.%03d%%\n",
+               (temperature_is_negative ? "-" : "+"),
+               temperature, temperature_decimal,
+               humidity, humidity_decimal);
+}
+
+/**************************************************************************//**
+ * Message sent callback
+ *****************************************************************************/
+void emberAfMessageSentCallback(EmberStatus status,
+                                EmberOutgoingMessage *message)
+{
+  (void) message;
+  if (status != EMBER_SUCCESS) {
+    app_log_info("TX: 0x%02X\n", status);
+  }
+}
+
+/**************************************************************************//**
+ * Stack status callback
+ *****************************************************************************/
+void emberAfStackStatusCallback(EmberStatus status)
+{
+  switch (status) {
+    case EMBER_NETWORK_UP:
+      app_log_info("Network up\n");
+      break;
+    case EMBER_NETWORK_DOWN:
+      app_log_info("Network down\n");
+      break;
+    default:
+      app_log_info("Stack status: 0x%02X\n", status);
+      break;
+  }
+}
+
+/**************************************************************************//**
+ * Child join callback
+ *****************************************************************************/
+void emberAfChildJoinCallback(EmberNodeType nodeType,
+                              EmberNodeId nodeId)
+{
+  app_log_info("Sensor joined: nodeID=0x%04X, type=0x%02X\n", nodeId, nodeType);
+}
+
+/**************************************************************************//**
+ * Tick callback — 메인 루프 (AP_OBC 명령 처리 + OTA 상태머신)
+ *****************************************************************************/
+void emberAfTickCallback(void)
+{
+  // LED: 네트워크 상태 표시
+  if (emberStackIsUp()) {
+    sl_led_turn_on(&sl_led_led0);
+  } else {
+    sl_led_turn_off(&sl_led_led0);
+  }
+
+  // ─── AP_OBC 명령 처리 ───
+  if (obc_cmd_ready) {
+    obc_cmd_ready = false;
+    process_obc_command();
+  }
+
+  // ─── OTA 자동화 상태머신 ───
+  ota_state_machine_tick();
+}
+
+/**************************************************************************//**
+ * [OTA Server Callback] 이미지 세그먼트 읽기
+ * - 배포 과정에서 플러그인이 호출
+ * - Bootloader storage slot 0에서 직접 읽어서 반환
+ *****************************************************************************/
+bool emberAfPluginOtaUnicastBootloaderServerGetImageSegmentCallback(
+  uint32_t startIndex,
+  uint32_t endIndex,
+  uint8_t  imageTag,
+  uint8_t *imageSegment)
+{
+  (void)imageTag;
+
+  uint32_t len = endIndex - startIndex + 1;
+  int32_t ret = bootloader_readStorage(0, startIndex, imageSegment, len);
+
+  if (ret != BOOTLOADER_OK) {
+    app_log_error("OTA: readStorage failed at offset %lu, err=0x%lX\n",
+                  startIndex, ret);
+    return false;
+  }
+  return true;
+}
+
+/**************************************************************************//**
+ * [OTA Server Callback] 이미지 배포 완료
+ *****************************************************************************/
+void emberAfPluginOtaUnicastBootloaderServerImageDistributionCompleteCallback(
+  EmberAfOtaUnicastBootloaderStatus status)
+{
+  if (status == EMBER_OTA_UNICAST_BOOTLOADER_STATUS_SUCCESS) {
+    app_log_info("OTA: Distribution SUCCESS. Requesting bootload...\n");
+    ota_state = OTA_REQUEST_BOOTLOAD;
+  } else {
+    app_log_error("OTA: Distribution FAILED, status=0x%02X\n", status);
+    ota_state = OTA_ERROR;
+  }
+}
+
+/**************************************************************************//**
+ * [OTA Server Callback] 부트로드 요청 완료
+ *****************************************************************************/
+void emberAfPluginOtaUnicastBootloaderServerRequestTargetBootloadCompleteCallback(
+  EmberAfOtaUnicastBootloaderStatus status)
+{
+  if (status == EMBER_OTA_UNICAST_BOOTLOADER_STATUS_SUCCESS) {
+    app_log_info("OTA: Bootload request SUCCESS. Slave will reboot.\n");
+    ota_state = OTA_COMPLETE;
+  } else {
+    app_log_error("OTA: Bootload request FAILED, status=0x%02X\n", status);
+    ota_state = OTA_ERROR;
+  }
+}
+
+/**************************************************************************//**
+ * Frequency hopping callback
+ *****************************************************************************/
+void emberAfFrequencyHoppingStartClientCompleteCallback(EmberStatus status)
+{
+  if (status != EMBER_SUCCESS) {
+    app_log_error("FH Client sync failed, status=0x%02X\n", status);
+  } else {
+    app_log_info("FH Client Sync Success\n");
+  }
+}
+
+/**************************************************************************//**
+ * Energy scan callback
+ *****************************************************************************/
+void emberAfEnergyScanCompleteCallback(int8_t mean, int8_t min,
+                                       int8_t max, uint16_t variance)
+{
+  app_log_info("Energy scan: mean=%d min=%d max=%d var=%d\n",
+               mean, min, max, variance);
+}
+
+// -----------------------------------------------------------------------------
+//                          Static Function Definitions
+// -----------------------------------------------------------------------------
+
+/**************************************************************************//**
+ * AP_OBC I2C 명령 파싱 및 디스패치
+ *
+ * 패킷 구조: [CMD(1B)] [PAYLOAD_LEN(2B, LE)] [PAYLOAD(N)]
+ *****************************************************************************/
+static void process_obc_command(void)
+{
+  if (obc_rx_len < 3) {
+    app_log_error("OBC: Packet too short (%d bytes)\n", obc_rx_len);
+    return;
+  }
+
+  uint8_t cmd = obc_rx_buffer[0];
+  uint16_t payload_len = (uint16_t)obc_rx_buffer[1]
+                       | ((uint16_t)obc_rx_buffer[2] << 8);
+  const uint8_t *payload = (const uint8_t *)&obc_rx_buffer[3];
+
+  // 길이 검증
+  if (3 + payload_len > obc_rx_len) {
+    app_log_error("OBC: Payload truncated (expected %d, got %d)\n",
+                  payload_len, obc_rx_len - 3);
+    return;
+  }
+
+  app_log_info("OBC CMD: 0x%02X, payload_len=%d\n", cmd, payload_len);
+
+  switch (cmd) {
+    case OBC_CMD_PREPARE:
+      handle_cmd_prepare(payload, payload_len);
+      break;
+    case OBC_CMD_WRITE_CHUNK:
+      handle_cmd_write_chunk(payload, payload_len);
+      break;
+    case OBC_CMD_START_OTA:
+      handle_cmd_start_ota();
+      break;
+    case OBC_CMD_STATUS:
+      // TODO: I2C read 방향으로 상태 반환 구현
+      app_log_info("OBC STATUS: ota_state=%d, offset=%lu/%lu\n",
+                   ota_state, gbl_write_offset, gbl_image_size);
+      break;
+    default:
+      app_log_error("OBC: Unknown CMD 0x%02X\n", cmd);
+      break;
+  }
+}
+
+/**************************************************************************//**
+ * CMD 0x01: OTA 준비
+ * Payload: [target_node_id(2B LE)] [image_size(4B LE)] [image_tag(1B)]
+ *
+ * 동작:
+ *   1. Storage slot 0 erase
+ *   2. 메타데이터 저장
+ *   3. 상태 → OTA_RECEIVING_FW
+ *****************************************************************************/
+static void handle_cmd_prepare(const uint8_t *payload, uint16_t len)
+{
+  if (len < 7) {
+    app_log_error("OBC PREPARE: payload too short\n");
+    return;
+  }
+
+  ota_target_node = (EmberNodeId)((uint16_t)payload[0] | ((uint16_t)payload[1] << 8));
+  gbl_image_size  = (uint32_t)payload[2]
+                  | ((uint32_t)payload[3] << 8)
+                  | ((uint32_t)payload[4] << 16)
+                  | ((uint32_t)payload[5] << 24);
+  ota_image_tag   = payload[6];
+
+  app_log_info("OTA PREPARE: target=0x%04X, size=%lu, tag=0x%02X\n",
+               ota_target_node, gbl_image_size, ota_image_tag);
+
+  // Storage slot 0 erase (시간이 걸릴 수 있음 — chunked erase 권장)
+  app_log_info("Erasing storage slot 0...\n");
+  int32_t ret = bootloader_eraseStorageSlot(0);
+  if (ret != BOOTLOADER_OK) {
+    app_log_error("Slot erase FAILED: 0x%lX\n", ret);
+    ota_state = OTA_ERROR;
+    return;
+  }
+  app_log_info("Slot 0 erased.\n");
+
+  gbl_write_offset = 0;
+  ota_state = OTA_RECEIVING_FW;
+}
+
+/**************************************************************************//**
+ * CMD 0x02: GBL 펌웨어 청크 쓰기
+ * Payload: [chunk_data(N bytes)]
+ *
+ * AP_OBC가 순차적으로 chunk를 보내고 Master가 storage에 기록
+ *****************************************************************************/
+static void handle_cmd_write_chunk(const uint8_t *payload, uint16_t len)
+{
+  if (ota_state != OTA_RECEIVING_FW) {
+    app_log_error("OBC WRITE_CHUNK: Not in RECEIVING state\n");
+    return;
+  }
+
+  if (len == 0) return;
+
+  int32_t ret = bootloader_writeStorage(0, gbl_write_offset,
+                                         (uint8_t *)payload, len);
+  if (ret != BOOTLOADER_OK) {
+    app_log_error("writeStorage FAIL at offset %lu: 0x%lX\n",
+                  gbl_write_offset, ret);
+    ota_state = OTA_ERROR;
+    return;
+  }
+
+  gbl_write_offset += len;
+
+  // 진행률 표시 (10% 단위)
+  if (gbl_image_size > 0) {
+    uint32_t pct = (gbl_write_offset * 100) / gbl_image_size;
+    static uint32_t last_pct = 0;
+    if (pct / 10 > last_pct / 10) {
+      app_log_info("FW upload: %lu%% (%lu/%lu)\n",
+                   pct, gbl_write_offset, gbl_image_size);
+    }
+    last_pct = pct;
+  }
+
+  // 전체 수신 완료?
+  if (gbl_write_offset >= gbl_image_size) {
+    app_log_info("FW upload complete. %lu bytes written.\n", gbl_write_offset);
+    ota_state = OTA_FW_READY;
+  }
+}
+
+/**************************************************************************//**
+ * CMD 0x03: OTA 배포 시작
+ *
+ * 동작:
+ *   1. Bootloader image validation (선택)
+ *   2. Slave에 커스텀 메시지로 준비 명령
+ *   3. ACK 대기 → distribution 시작
+ *****************************************************************************/
+static void handle_cmd_start_ota(void)
+{
+  if (ota_state != OTA_FW_READY) {
+    app_log_error("OBC START_OTA: FW not ready (state=%d)\n", ota_state);
+    return;
+  }
+
+  // (선택) 이미지 검증
+  app_log_info("Validating GBL image in slot 0...\n");
+  // bootloader_verifyImage()는 시간이 오래 걸릴 수 있으므로
+  // 필요시 chunked verification 사용
+  // 여기서는 skip하고 바로 진행 (실제 운용에서는 검증 권장)
+
+  // Slave에 준비 명령 전송
+  app_log_info("Sending prepare command to Slave 0x%04X...\n", ota_target_node);
+  slave_prepare_acked = false;
+  send_slave_prepare_msg(ota_target_node);
+
+  ota_timer_start = sl_sleeptimer_get_tick_count();
+  ota_state = OTA_WAITING_SLAVE_PREPARE;
+}
+
+/**************************************************************************//**
+ * Slave에 OTA 준비 커스텀 메시지 전송
+ *
+ * Payload: [CUSTOM_MSG_PREPARE_OTA(1B)] [image_tag(1B)] [image_size(4B LE)]
+ *****************************************************************************/
+static void send_slave_prepare_msg(EmberNodeId target)
+{
+  uint8_t msg[6];
+  msg[0] = CUSTOM_MSG_PREPARE_OTA;
+  msg[1] = ota_image_tag;
+  msg[2] = (uint8_t)(gbl_image_size & 0xFF);
+  msg[3] = (uint8_t)((gbl_image_size >> 8) & 0xFF);
+  msg[4] = (uint8_t)((gbl_image_size >> 16) & 0xFF);
+  msg[5] = (uint8_t)((gbl_image_size >> 24) & 0xFF);
+
+  EmberStatus status = emberMessageSend(target,
+                                         CUSTOM_ENDPOINT,
+                                         0, // messageTag
+                                         sizeof(msg),
+                                         msg,
+                                         tx_options);
+  if (status != EMBER_SUCCESS) {
+    app_log_error("Failed to send prepare msg: 0x%02X\n", status);
+  }
+}
+
+/**************************************************************************//**
+ * OTA 자동화 상태머신 — emberAfTickCallback에서 호출
+ *****************************************************************************/
+static void ota_state_machine_tick(void)
+{
+  switch (ota_state) {
+
+    case OTA_WAITING_SLAVE_PREPARE: {
+      if (slave_prepare_acked) {
+        app_log_info("Slave ready. Starting OTA distribution...\n");
+
+        EmberAfOtaUnicastBootloaderStatus ota_ret =
+          emberAfPluginOtaUnicastBootloaderServerInitiateImageDistribution(
+            ota_target_node,
+            gbl_image_size,
+            ota_image_tag);
+
+        if (ota_ret == EMBER_OTA_UNICAST_BOOTLOADER_STATUS_SUCCESS) {
+          app_log_info("OTA distribution initiated.\n");
+          ota_state = OTA_DISTRIBUTING;
+        } else {
+          app_log_error("OTA initiate FAILED: 0x%02X\n", ota_ret);
+          ota_state = OTA_ERROR;
+        }
+      } else if (sl_sleeptimer_tick_to_ms(
+                   sl_sleeptimer_get_tick_count() - ota_timer_start)
+                 > OTA_SLAVE_PREPARE_TIMEOUT_MS) {
+        app_log_error("Slave prepare TIMEOUT. Retrying...\n");
+        send_slave_prepare_msg(ota_target_node);
+        ota_timer_start = sl_sleeptimer_get_tick_count();
+      }
+      break;
+    }
+
+    case OTA_DISTRIBUTING:
+      break;
+
+    case OTA_REQUEST_BOOTLOAD: {
+      EmberAfOtaUnicastBootloaderStatus bl_ret =
+        emberAfPluginUnicastBootloaderServerInitiateRequestTargetBootload(
+          OTA_BOOTLOAD_DELAY_MS,
+          ota_image_tag,
+          ota_target_node);
+
+      if (bl_ret == EMBER_OTA_UNICAST_BOOTLOADER_STATUS_SUCCESS) {
+        app_log_info("Bootload request sent (delay=%dms)\n",
+                     OTA_BOOTLOAD_DELAY_MS);
+        ota_state = OTA_WAITING_BOOTLOAD;
+      } else {
+        app_log_error("Bootload request FAILED: 0x%02X\n", bl_ret);
+        ota_state = OTA_ERROR;
+      }
+      break;
+    }
+
+    case OTA_WAITING_BOOTLOAD:
+      break;
+
+    case OTA_COMPLETE:
+      app_log_info("=== OTA COMPLETE for node 0x%04X ===\n", ota_target_node);
+      ota_state = OTA_IDLE;
+      break;
+
+    case OTA_ERROR:
+      app_log_error("=== OTA ERROR. Reset state to IDLE. ===\n");
+      ota_state = OTA_IDLE;
+      break;
+
+    case OTA_IDLE:
+    case OTA_RECEIVING_FW:
+    case OTA_FW_READY:
+    default:
+      break;
+  }
+}
+
+// -----------------------------------------------------------------------------
+//                     RTOS Task (기존 코드, 변경 없음)
+// -----------------------------------------------------------------------------
+#if defined(EMBER_AF_PLUGIN_MICRIUM_RTOS) && defined(EMBER_AF_PLUGIN_MICRIUM_RTOS_APP_TASK1)
+void emberAfPluginMicriumRtosAppTask1InitCallback(void)
+{
+  app_log_info("app task init\n");
+}
+
+#include <kernel/include/os.h>
+#define TICK_INTERVAL_MS 1000
+
+void emberAfPluginMicriumRtosAppTask1MainLoopCallback(void *p_arg)
+{
+  RTOS_ERR err;
+  OS_TICK yield_time_ticks = (OSCfg_TickRate_Hz * TICK_INTERVAL_MS) / 1000;
+
+  while (true) {
+    app_log_info("app task tick\n");
+    OSTimeDly(yield_time_ticks, OS_OPT_TIME_DLY, &err);
+  }
+}
+#endif

@@ -1,0 +1,6 @@
+03:41:07 **** Incremental Build of configuration GNU ARM v12.2.1 - Debug for project BRD4253A_EFR32FG12P_i2c ****
+make -j16 all 
+make: 'all'을(를) 위해 할 일이 없습니다.
+
+03:41:07 Build Finished. 0 errors, 0 warnings. (took 146ms)
+

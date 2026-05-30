@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<section name="Workbench">
+	<list key="installedFeatures">
+		<item value="org.eclipse.cdt.debug.ui.memory:11.6.1.202406241230"/>
+		<item value="org.eclipse.cdt.gnu.build:11.6.1.202406241230"/>
+		<item value="org.eclipse.cdt.native:11.6.1.202407022008"/>
+		<item value="org.eclipse.cdt.platform:11.6.1.202407022008"/>
+		<item value="org.eclipse.draw2d:3.22.0.202411181923"/>
+		<item value="org.eclipse.embedcdt.debug.gdbjtag.jlink:6.6.1.202408270735"/>
+		<item value="org.eclipse.embedcdt.debug.gdbjtag:6.6.1.202408270735"/>
+		<item value="org.eclipse.emf.common:2.33.0.v20240911-1027"/>
+		<item value="org.eclipse.emf.ecore:2.39.0.v20241018-1213"/>
+		<item value="org.eclipse.help:2.3.2000.v20241120-1800"/>
+		<item value="org.eclipse.platform:4.34.0.v20241120-1800"/>
+		<item value="org.eclipse.rcp:4.34.0.v20241120-1800"/>
+		<item value="org.eclipse.zest:3.22.0.202411181923"/>
+	</list>
+</section>

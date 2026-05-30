@@ -1,0 +1,54 @@
+05:51:03 **** Incremental Build of configuration GNU ARM v12.2.1 - Debug for project BRD4253A_EFR32FG12_spi_slave_interrupt ****
+make -j16 all 
+Building file: ../src/main_s1_xg12.c
+Invoking: GNU ARM C Compiler
+arm-none-eabi-gcc -g -gdwarf-2 -mcpu=cortex-m4 -mthumb -std=c99 '-DEFR32FG12P433F1024GL125=1' '-DDEBUG=1' -I"/home/lmh/SimplicityStudio/SDKs/gecko_sdk//hardware/kit/EFR32FG12_BRD4253A/config" -I"/home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/CMSIS/Core/Include" -I"/home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc" -I"/home/lmh/SimplicityStudio/SDKs/gecko_sdk//hardware/kit/common/bsp" -I"/home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc" -I"/home/lmh/SimplicityStudio/SDKs/gecko_sdk//hardware/kit/common/drivers" -I"/home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/Device/SiliconLabs/EFR32FG12P/Include" -O0 -Wall -mno-sched-prolog -fno-builtin -ffunction-sections -fdata-sections -mfpu=fpv4-sp-d16 -mfloat-abi=softfp -c -fmessage-length=0 -MMD -MP -MF"src/main_s1_xg12.d" -MT"src/main_s1_xg12.o" -o "src/main_s1_xg12.o" "../src/main_s1_xg12.c"
+Finished building: ../src/main_s1_xg12.c
+ 
+Building target: BRD4253A_EFR32FG12_spi_slave_interrupt.axf
+Invoking: GNU ARM C Linker
+arm-none-eabi-gcc -g -gdwarf-2 -mcpu=cortex-m4 -mthumb -T "BRD4253A_EFR32FG12_spi_slave_interrupt.ld" -Wl,--no-warn-rwx-segments -Xlinker --gc-sections -Xlinker -Map="BRD4253A_EFR32FG12_spi_slave_interrupt.map" -mfpu=fpv4-sp-d16 -mfloat-abi=softfp --specs=nano.specs -o BRD4253A_EFR32FG12_spi_slave_interrupt.axf "./CMSIS/EFR32FG12P/startup_efr32fg12p.o" "./CMSIS/EFR32FG12P/system_efr32fg12p.o" "./emlib/em_cmu.o" "./emlib/em_core.o" "./emlib/em_emu.o" "./emlib/em_gpio.o" "./emlib/em_system.o" "./emlib/em_usart.o" "./src/main_s1_xg12.o" "./src/sl_syscalls.o" -Wl,--start-group -lgcc -lc -lnosys -Wl,--end-group
+Finished building target: BRD4253A_EFR32FG12_spi_slave_interrupt.axf
+ 
+Building out file: BRD4253A_EFR32FG12_spi_slave_interrupt.out
+arm-none-eabi-objcopy "BRD4253A_EFR32FG12_spi_slave_interrupt.axf" "BRD4253A_EFR32FG12_spi_slave_interrupt.out"
+ 
+Building hex file: BRD4253A_EFR32FG12_spi_slave_interrupt.hex
+arm-none-eabi-objcopy -O ihex "BRD4253A_EFR32FG12_spi_slave_interrupt.axf" "BRD4253A_EFR32FG12_spi_slave_interrupt.hex"
+ 
+Building bin file: BRD4253A_EFR32FG12_spi_slave_interrupt.bin
+arm-none-eabi-objcopy -O binary "BRD4253A_EFR32FG12_spi_slave_interrupt.axf" "BRD4253A_EFR32FG12_spi_slave_interrupt.bin"
+ 
+Building s37 file: BRD4253A_EFR32FG12_spi_slave_interrupt.s37
+arm-none-eabi-objcopy -O srec "BRD4253A_EFR32FG12_spi_slave_interrupt.axf" "BRD4253A_EFR32FG12_spi_slave_interrupt.s37"
+ 
+Running size tool
+arm-none-eabi-size "BRD4253A_EFR32FG12_spi_slave_interrupt.axf" -A
+BRD4253A_EFR32FG12_spi_slave_interrupt.axf  :
+section             size        addr
+.text              17356           0
+.ARM.exidx           152       17356
+.copy.table           12       17508
+.zero.table            0       17520
+.data                 28   536870912
+.bss                  72   536870940
+.heap               3072   536871016
+.stack_dummy        1024   536871016
+.ARM.attributes       46           0
+.comment              69           0
+.debug_line_str      422           0
+.debug_line        23272           0
+.debug_info        47260           0
+.debug_abbrev       5932           0
+.debug_aranges      2248           0
+.debug_str         20589           0
+.debug_loc         19836           0
+.debug_ranges       2072           0
+.debug_frame       10704           0
+Total             154166
+
+
+ 
+
+05:51:03 Build Finished. 0 errors, 0 warnings. (took 257ms)
+

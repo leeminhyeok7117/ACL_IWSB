@@ -1,0 +1,6 @@
+00:20:00 **** Incremental Build of configuration GNU ARM v12.2.1 - Default for project connect_soc_empty_IWSB ****
+make -j16 all 
+make: 'all'을(를) 위해 할 일이 없습니다.
+
+00:20:00 Build Finished. 0 errors, 0 warnings. (took 193ms)
+

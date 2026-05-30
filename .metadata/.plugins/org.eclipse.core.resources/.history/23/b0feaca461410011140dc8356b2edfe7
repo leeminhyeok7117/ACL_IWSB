@@ -1,0 +1,159 @@
+/***************************************************************************//**
+ * @file app_process.c
+ * @brief RAIL OTA Receiver - Main state machine
+ *
+ * OTA 패킷 프로토콜:
+ *   OTA_START : [0x01][total_size : 4bytes]
+ *   OTA_DATA  : [0x02][offset : 4bytes][len : 2bytes][data : N bytes]
+ *   OTA_END   : [0x03]
+ ******************************************************************************/
+
+// -----------------------------------------------------------------------------
+//                                   Includes
+// -----------------------------------------------------------------------------
+#include "sl_component_catalog.h"
+#include "rail.h"
+#include "btl_interface.h"
+#include "btl_interface_storage.h"
+#include <string.h>
+
+#if defined(SL_CATALOG_KERNEL_PRESENT)
+#include "app_task_init.h"
+#endif
+
+// -----------------------------------------------------------------------------
+//                              Macros and Typedefs
+// -----------------------------------------------------------------------------
+#define OTA_PKT_START     0x01
+#define OTA_PKT_DATA      0x02
+#define OTA_PKT_END       0x03
+
+#define RX_BUFFER_SIZE    256
+#define OTA_STORAGE_SLOT  0       // Gecko Bootloader 슬롯 번호
+
+typedef enum {
+  OTA_STATE_IDLE,       // 대기 중
+  OTA_STATE_RECEIVING,  // 이미지 수신 중
+  OTA_STATE_COMPLETE    // 수신 완료, 재부팅 대기
+} ota_state_t;
+
+// -----------------------------------------------------------------------------
+//                                Static Variables
+// -----------------------------------------------------------------------------
+static uint8_t     rx_buffer[RX_BUFFER_SIZE];
+static uint16_t    rx_packet_len  = 0;
+static bool        rx_packet_ready = false;
+
+static ota_state_t ota_state         = OTA_STATE_IDLE;
+static uint32_t    total_image_size  = 0;
+static uint32_t    bytes_received    = 0;
+const char ota_version[] = "OTA_TEST_V2_XXXXXXXXXXXXXXXXXXXXXXXXXX";
+// -----------------------------------------------------------------------------
+//                          Public Function Definitions
+// -----------------------------------------------------------------------------
+
+/******************************************************************************
+ * Application state machine - 메인 루프에서 반복 호출됨
+ *****************************************************************************/
+void app_process_action(RAIL_Handle_t rail_handle)
+{
+  if (!rx_packet_ready) {
+    return;
+  }
+  rx_packet_ready = false;
+
+  uint8_t pkt_type = rx_buffer[0];
+
+  switch (pkt_type) {
+
+    // -------------------------------------------------------------------------
+    // OTA 시작 패킷: Flash 슬롯 초기화
+    // -------------------------------------------------------------------------
+    case OTA_PKT_START: {
+      memcpy(&total_image_size, &rx_buffer[1], sizeof(uint32_t));
+      bytes_received = 0;
+      ota_state = OTA_STATE_IDLE;
+
+      // 슬롯 지우기
+      int32_t result = bootloader_eraseStorageSlot(OTA_STORAGE_SLOT);
+      if (result == BOOTLOADER_OK) {
+        ota_state = OTA_STATE_RECEIVING;
+      }
+      break;
+    }
+
+    // -------------------------------------------------------------------------
+    // OTA 데이터 패킷: Flash 슬롯에 청크 기록
+    // -------------------------------------------------------------------------
+    case OTA_PKT_DATA: {
+      if (ota_state != OTA_STATE_RECEIVING) {
+        break;
+      }
+
+      uint32_t offset   = 0;
+      uint16_t data_len = 0;
+      memcpy(&offset,   &rx_buffer[1], sizeof(uint32_t));
+      memcpy(&data_len, &rx_buffer[5], sizeof(uint16_t));
+
+      // 버퍼 초과 방지
+      if ((7U + data_len) > rx_packet_len) {
+        break;
+      }
+
+      bootloader_writeStorage(OTA_STORAGE_SLOT, offset,
+                              &rx_buffer[7], data_len);
+      bytes_received += data_len;
+      break;
+    }
+
+    // -------------------------------------------------------------------------
+    // OTA 종료 패킷: 이미지 검증 후 재부팅
+    // -------------------------------------------------------------------------
+    case OTA_PKT_END: {
+      if (ota_state != OTA_STATE_RECEIVING) {
+        break;
+      }
+      ota_state = OTA_STATE_COMPLETE;
+
+      int32_t result = bootloader_verifyImage(OTA_STORAGE_SLOT, NULL);
+      if (result == BOOTLOADER_OK) {
+        bootloader_setImageToBootload(OTA_STORAGE_SLOT);
+        bootloader_rebootAndInstall();  // 여기서 재부팅 → Bootloader가 이미지 적용
+      } else {
+        // 검증 실패 시 초기화
+        ota_state = OTA_STATE_IDLE;
+      }
+      break;
+    }
+
+    default:
+      break;
+  }
+
+  // RX 재시작
+  RAIL_StartRx(rail_handle, 0, NULL);
+}
+
+/******************************************************************************
+ * RAIL 이벤트 핸들러 - ISR 컨텍스트에서 호출됨
+ *****************************************************************************/
+void sl_rail_util_on_event(RAIL_Handle_t rail_handle, RAIL_Events_t events)
+{
+  if (events & RAIL_EVENT_RX_PACKET_RECEIVED) {
+    RAIL_RxPacketInfo_t pkt_info;
+    RAIL_RxPacketHandle_t pkt_handle = RAIL_GetRxPacketInfo(
+        rail_handle, RAIL_RX_PACKET_HANDLE_NEWEST, &pkt_info);
+
+    if ((pkt_handle != RAIL_RX_PACKET_HANDLE_INVALID)
+        && (pkt_info.packetBytes <= RX_BUFFER_SIZE)) {
+      RAIL_CopyRxPacket(rx_buffer, &pkt_info);
+      rx_packet_len   = pkt_info.packetBytes;
+      rx_packet_ready = true;
+    }
+    RAIL_ReleaseRxPacket(rail_handle, pkt_handle);
+  }
+
+#if defined(SL_CATALOG_KERNEL_PRESENT)
+  app_task_notify();
+#endif
+}

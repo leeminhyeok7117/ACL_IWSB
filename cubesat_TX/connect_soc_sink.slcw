@@ -1,0 +1,7 @@
+---
+workspace_name: "connect_soc_sink"
+label: "connect_soc_sink"
+project:
+- id: "main"
+  path: "cubesat_TX.slcp"
+  output: "."

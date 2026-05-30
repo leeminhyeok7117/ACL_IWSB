@@ -1,0 +1,121 @@
+#include "em_i2c.h"
+#include "btl_interface.h"
+#include "btl_interface_storage.h"
+#include "app_i2c_dfu.h"
+#include "app_log.h"
+
+static uint32_t flash_offset = 0;
+
+/* ── IRQ 핸들러 ─────────────────────────────────── */
+void I2C0_IRQHandler(void)
+{
+    uint32_t flags = I2C_IntGet(I2C0);
+    I2C_IntClear(I2C0, flags);
+
+    /* 버스 에러 처리 */
+    if (flags & I2C_IF_BUSERR) {
+        i2c_rx_len = 0;
+        dfu_state  = DFU_ERROR;
+        return;
+    }
+
+    /* 주소 매칭: 수신 시작 */
+    if (flags & I2C_IF_ADDR) {
+        i2c_rx_len = 0;
+        I2C0->CMD  = I2C_CMD_ACK;
+    }
+
+    /* 데이터 수신 */
+    if (flags & I2C_IF_RXDATAV) {
+        if (i2c_rx_len < I2C_RX_BUF_SIZE) {
+            i2c_rx_buf[i2c_rx_len++] = (uint8_t)(I2C0->RXDATA);
+        }
+        I2C0->CMD = I2C_CMD_ACK;
+    }
+
+    /* STOP 조건: 패킷 수신 완료 */
+    if (flags & I2C_IF_SSTOP) {
+        if (i2c_rx_len > 0) {
+            i2c_pkt_ready = true;
+        }
+    }
+}
+
+/* ── CRC8 검증 ──────────────────────────────────── */
+static uint8_t crc8_calc(const uint8_t *data, uint16_t len)
+{
+    uint8_t crc = 0x00;
+    for (uint16_t i = 0; i < len; i++) {
+        crc ^= data[i];
+        for (int j = 0; j < 8; j++) {
+            crc = (crc & 0x80) ? ((crc << 1) ^ 0x07) : (crc << 1);
+        }
+    }
+    return crc;
+}
+
+/* ── 메인 루프 ──────────────────────────────────── */
+void app_process_action(void)
+{
+    if (!i2c_pkt_ready) return;
+    i2c_pkt_ready = false;
+
+    if (i2c_rx_len == 1) {
+        printf("[I2C] Received: 0x%02X (%d)\r\n",
+               i2c_rx_buf[0], i2c_rx_buf[0]);
+        return;
+    }
+
+
+    /* 패킷 파싱: [CMD(1)][LEN(2)][DATA(N)][CRC8(1)] */
+    if (i2c_rx_len < 4) { dfu_state = DFU_ERROR; return; }
+
+    uint8_t  cmd     = i2c_rx_buf[0];
+    uint16_t len     = ((uint16_t)i2c_rx_buf[1] << 8) | i2c_rx_buf[2];
+    uint8_t *payload = (uint8_t *)&i2c_rx_buf[3];
+    uint8_t  rx_crc  = i2c_rx_buf[3 + len];
+
+    /* CRC 검증 */
+    if (crc8_calc((uint8_t *)i2c_rx_buf, 3 + len) != rx_crc) {
+        dfu_state = DFU_ERROR;
+        return;
+    }
+
+    int32_t ret;
+
+    switch (cmd) {
+        case CMD_ERASE:
+            ret = bootloader_eraseStorageSlot(0);
+            flash_offset = 0;
+            dfu_state = (ret == BOOTLOADER_OK) ? DFU_RECEIVING : DFU_ERROR;
+            printf("[DFU] ERASE %s\r\n", (ret == BOOTLOADER_OK) ? "OK" : "FAIL");
+            break;
+
+        case CMD_DATA:
+            if (dfu_state != DFU_RECEIVING) { dfu_state = DFU_ERROR; break; }
+            if (flash_offset + len > SLOT_SIZE) { dfu_state = DFU_ERROR; break; }
+            ret = bootloader_writeStorage(0, flash_offset, payload, len);
+            if (ret == BOOTLOADER_OK) {
+                flash_offset += len;
+                printf("[DFU] DATA offset=%lu len=%u\r\n", flash_offset, len);
+            } else {
+                dfu_state = DFU_ERROR;
+                printf("[DFU] DATA FAIL\r\n");
+            }
+            break;
+
+        case CMD_VERIFY:
+            ret = bootloader_verifyImage(0, NULL);
+            dfu_state = (ret == BOOTLOADER_OK) ? DFU_VERIFIED : DFU_ERROR;
+            printf("[DFU] VERIFY %s\r\n", (ret == BOOTLOADER_OK) ? "OK" : "FAIL");
+            break;
+
+        case CMD_REBOOT:
+            if (dfu_state == DFU_VERIFIED) {
+                printf("[DFU] REBOOT\r\n");
+                bootloader_setImageToBootload(0);
+                bootloader_rebootAndInstall();
+            }
+            break;
+    }
+}

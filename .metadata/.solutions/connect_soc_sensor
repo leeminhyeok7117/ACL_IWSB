@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="ASCII"?>
+<MSolutions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.silabs.com/ss/Solution.ecore">
+  <solution name="connect_soc_sensor" label="connect_soc_sensor">
+    <SolutionModuleReferences id="slc.workspace.data"/>
+    <property key="solution.activeDebugGroup" value="Default"/>
+    <project builtin="true" name="cubesat_RX" location="../../cubesat_RX"/>
+    <configuration name="Default">
+      <project builtin="true" name="cubesat_RX"/>
+    </configuration>
+    <SDMDefinition id="slc.workspace.data">
+      <project name="cubesat_RX" location="/home/lmh/SimplicityStudio/v5_workspace/cubesat_RX/."/>
+    </SDMDefinition>
+  </solution>
+</MSolutions>

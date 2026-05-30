@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<workingSetManager>
+<workingSet editPageId="com.silabs.ss.framework.ide.project.ui.solution" factoryID="org.eclipse.ui.internal.WorkingSetFactory" id="1777377023982_5" label="connect_soc_sink" name="connect_soc_sink">
+<item factoryID="org.eclipse.ui.internal.model.ResourceFactory" path="/cubesat_TX" type="4"/>
+</workingSet>
+<workingSet editPageId="com.silabs.ss.framework.ide.project.ui.solution" factoryID="org.eclipse.ui.internal.WorkingSetFactory" id="1777377072877_8" label="connect_soc_sensor" name="connect_soc_sensor">
+<item factoryID="org.eclipse.ui.internal.model.ResourceFactory" path="/cubesat_RX" type="4"/>
+</workingSet>
+<workingSet aggregate="true" factoryID="org.eclipse.ui.internal.WorkingSetFactory" id="1777102548486_0" label="Window Working Set" name="Aggregate for window 1777102548486"/>
+<workingSet aggregate="true" factoryID="org.eclipse.ui.internal.WorkingSetFactory" id="1777122935485_2" label="Window Working Set" name="Aggregate for window 1777122935485"/>
+<workingSet aggregate="true" factoryID="org.eclipse.ui.internal.WorkingSetFactory" id="1778872363304_7" label="Solutions" name="Solutions">
+<workingSet IMemento.internal.id="connect_soc_sensor"/>
+<workingSet IMemento.internal.id="connect_soc_sink"/>
+</workingSet>
+<workingSet aggregate="true" factoryID="org.eclipse.ui.internal.WorkingSetFactory" id="1778874827582_5" label="Window Working Set" name="Aggregate for window 1778874827581"/>
+</workingSetManager>
