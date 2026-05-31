@@ -24,10 +24,10 @@
 #include "app_framework_common.h"
 #include "sl_simple_led_instances.h"
 #include "app_process.h"
+#include "app_init.h"
 #include <stdlib.h>
 #include <string.h>
 #include "sl_sleeptimer.h"
-#include "sl_simple_button_instances.h"
 #include "btl_interface.h"
 #include "btl_interface_storage.h"
 #include "ota-unicast-bootloader-server.h"
@@ -57,6 +57,9 @@
 
 #define OTA_SLAVE_PREPARE_TIMEOUT_MS   10000U
 #define OTA_BOOTLOAD_DELAY_MS          2000U
+// 배포/부트로드 단계 무응답 상한 (플러그인이 완료 콜백을 끝내 안 부르는 경우 대비)
+#define OTA_DISTRIBUTE_TIMEOUT_MS      180000U  // 3분: ~155KB 배포 + 재시도 충분
+#define OTA_BOOTLOAD_WAIT_TIMEOUT_MS   30000U   // bootload 요청 완료 대기 상한
 
 #define DEVICE_ID_NONE  0xFFU
 
@@ -154,40 +157,6 @@ static sl_sleeptimer_timer_handle_t poll_cycle_timer;
 // -----------------------------------------------------------------------------
 
 /**************************************************************************//**
- * BTN0 — OTA 시작
- *****************************************************************************/
-void sl_button_on_change(const sl_button_t *handle)
-{
-  if (handle != &sl_button_btn0
-      || sl_button_get_state(handle) != SL_SIMPLE_BUTTON_PRESSED) {
-    return;
-  }
-
-  if (ota_state != OTA_FW_READY_MANUAL && ota_state != OTA_FW_READY) {
-    app_log_info("BTN0: No GBL or OTA in progress (state=%d)\n", ota_state);
-    return;
-  }
-
-  if (ota_target_device_id == DEVICE_ID_NONE) {
-    app_log_info("BTN0: OTA target not set. Use: ota_target <1-%d>\n", MAX_SLAVES);
-    return;
-  }
-
-  EmberNodeId target_node = get_node_id_by_device_id(ota_target_device_id);
-  if (target_node == EMBER_NULL_NODE_ID) {
-    app_log_info("BTN0: device_id=%d not registered (node_id unknown).\n",
-                 ota_target_device_id);
-    app_log_info("  Waiting for slave to rejoin and announce. Try again.\n");
-    return;
-  }
-
-  ota_target_node = target_node;
-  app_log_info("BTN0: OTA → device_id=%d, node=0x%04X\n",
-               ota_target_device_id, ota_target_node);
-  start_ota_distribution();
-}
-
-/**************************************************************************//**
  * Incoming message callback
  *****************************************************************************/
 void emberAfIncomingMessageCallback(EmberIncomingMessage *message)
@@ -207,6 +176,16 @@ void emberAfIncomingMessageCallback(EmberIncomingMessage *message)
       return;
     }
     register_slave(message->payload[1], message->source);
+    // [EUI64] RX가 EUI-64를 함께 보냈으면 g_eui64_map[] 채우기용으로 출력.
+    //   출력 순서 = map 입력 순서(LSB first) → 그대로 복사-붙여넣기 가능.
+    if (message->length >= 10) {
+      app_log_info("  RX id=%d EUI64 (map order, LSB first): {",
+                   message->payload[1]);
+      for (int i = 2; i <= 9; i++) {
+        app_log_info("0x%02X%s", message->payload[i], (i < 9) ? ", " : "");
+      }
+      app_log_info("}\n");
+    }
     return;
   }
 
@@ -262,7 +241,7 @@ void emberAfIncomingMessageCallback(EmberIncomingMessage *message)
   humidity_decimal = humidity - (humidity / 1000) * 1000;
   humidity = humidity / 1000;
 
-  app_log_info(" Temp: %s%d.%03dC Hum: %d.%03d%%\n",
+  app_log_info(" Temp: %s%ld.%03ldC Hum: %lu.%03lu%%\n",
                (temperature_is_negative ? "-" : "+"),
                temperature, temperature_decimal,
                humidity, humidity_decimal);
@@ -319,6 +298,8 @@ void emberAfChildJoinCallback(EmberNodeType nodeType, EmberNodeId nodeId)
  *****************************************************************************/
 void emberAfTickCallback(void)
 {
+  tx_watchdog_feed();   // 워치독 급이기 (tick 살아있음 보고)
+
   // ─── [C-2] 첫 tick에서 NVM3 slave_table 로드 ─────────────────────────────
   if (!slave_table_loaded) {
     slave_table_loaded = true;
@@ -513,7 +494,7 @@ void polling_restart(void)
   app_log_info("[POLL] Restarted.\n");
 
   if (count_pollable_slaves() == 0) {
-    app_log_info("[POLL] No pollable slaves (node_id unknown). Retry in %lums.\n",
+    app_log_info("[POLL] No pollable slaves (node_id unknown). Retry in %ums.\n",
                  POLL_CYCLE_INTERVAL_MS);
     sl_sleeptimer_start_timer_ms(&poll_cycle_timer, POLL_CYCLE_INTERVAL_MS,
                                  poll_cycle_timer_cb, NULL, 0, 0);
@@ -937,6 +918,7 @@ static void ota_state_machine_tick(void)
             ota_target_node, gbl_image_size, ota_image_tag);
         if (ret == EMBER_OTA_UNICAST_BOOTLOADER_STATUS_SUCCESS) {
           app_log_info("OTA distribution initiated.\n");
+          ota_timer_start = sl_sleeptimer_get_tick_count();  // 배포 타임아웃 기준
           ota_state = OTA_DISTRIBUTING;
         } else {
           app_log_error("OTA initiate FAILED: 0x%02X\n", ret);
@@ -964,8 +946,17 @@ static void ota_state_machine_tick(void)
       break;
     }
 
-    case OTA_DISTRIBUTING:
+    case OTA_DISTRIBUTING: {
+      // 플러그인이 완료 콜백을 끝내 호출하지 않는 경우(타겟 소실 등) 무한정체 방지.
+      uint32_t elapsed = sl_sleeptimer_tick_to_ms(
+                           sl_sleeptimer_get_tick_count() - ota_timer_start);
+      if (elapsed > OTA_DISTRIBUTE_TIMEOUT_MS) {
+        app_log_error("OTA distribute timeout (%lums). Aborting.\n", elapsed);
+        emberAfPluginOtaUnicastBootloaderServerAbortCurrentProcess();
+        ota_state = OTA_ERROR;
+      }
       break;
+    }
 
     case OTA_REQUEST_BOOTLOAD: {
       if (!bootload_req_pending) break;
@@ -978,6 +969,7 @@ static void ota_state_machine_tick(void)
           OTA_BOOTLOAD_DELAY_MS, ota_image_tag, ota_target_node);
 
       if (ret == EMBER_OTA_UNICAST_BOOTLOADER_STATUS_SUCCESS) {
+        ota_timer_start = sl_sleeptimer_get_tick_count();  // 부트로드 대기 타임아웃 기준
         ota_state = OTA_WAITING_BOOTLOAD;
       } else {
         app_log_error("Bootload request FAILED: 0x%02X\n", ret);
@@ -986,8 +978,18 @@ static void ota_state_machine_tick(void)
       break;
     }
 
-    case OTA_WAITING_BOOTLOAD:
+    case OTA_WAITING_BOOTLOAD: {
+      // bootload 완료 콜백이 끝내 안 오는 경우 FW_READY로 복귀(이미지는 슬롯에 유지).
+      uint32_t elapsed = sl_sleeptimer_tick_to_ms(
+                           sl_sleeptimer_get_tick_count() - ota_timer_start);
+      if (elapsed > OTA_BOOTLOAD_WAIT_TIMEOUT_MS) {
+        app_log_error("OTA bootload-wait timeout (%lums). Back to FW_READY.\n", elapsed);
+        ota_target_device_id = DEVICE_ID_NONE;
+        ota_target_node      = EMBER_NULL_NODE_ID;
+        ota_state            = OTA_FW_READY;
+      }
       break;
+    }
 
     case OTA_ERROR:
       app_log_error("=== OTA ERROR → IDLE ===\n");
@@ -1099,7 +1101,7 @@ static void poll_tick(void)
 
   uint8_t pollable = count_pollable_slaves();
   if (pollable == 0 || poll_cycle_count >= pollable) {
-    app_log_info("[POLL] Cycle done (%u/%u slaves). Next in %lums.\n",
+    app_log_info("[POLL] Cycle done (%u/%u slaves). Next in %ums.\n",
                  poll_cycle_count, pollable, POLL_CYCLE_INTERVAL_MS);
     poll_running = false;
     sl_sleeptimer_start_timer_ms(&poll_cycle_timer, POLL_CYCLE_INTERVAL_MS,
@@ -1121,7 +1123,7 @@ static void poll_cycle_timer_cb(sl_sleeptimer_timer_handle_t *handle, void *data
   poll_waiting     = false;
 
   if (count_pollable_slaves() == 0) {
-    app_log_info("[POLL] No pollable slaves yet. Retry in %lums.\n",
+    app_log_info("[POLL] No pollable slaves yet. Retry in %ums.\n",
                  POLL_CYCLE_INTERVAL_MS);
     sl_sleeptimer_start_timer_ms(&poll_cycle_timer, POLL_CYCLE_INTERVAL_MS,
                                  poll_cycle_timer_cb, NULL, 0, 0);

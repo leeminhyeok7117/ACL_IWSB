@@ -940,3 +940,330 @@ java.io.FileNotFoundException: could not find /resources/clic/statics/part.png i
 	at org.eclipse.jetty.util.thread.QueuedThreadPool$Runner.doRunJob(QueuedThreadPool.java:1209)
 	at org.eclipse.jetty.util.thread.QueuedThreadPool$Runner.run(QueuedThreadPool.java:1164)
 	at java.base/java.lang.Thread.run(Thread.java:1583)
+!SESSION 2026-05-30 20:11:09.769 -----------------------------------------------
+eclipse.buildId=unknown
+java.version=21.0.5
+java.vendor=Amazon.com Inc.
+BootLoader constants: OS=linux, ARCH=x86_64, WS=gtk, NL=en_US
+Command-line arguments:  -os linux -ws gtk -arch x86_64
+
+!ENTRY com.silabs.ss.platform.rcp.core 2 0 2026-05-30 20:11:10.699
+!MESSAGE Logging bundle not found: com.silabs.ss.logger, logging not initialized.
+
+!ENTRY com.silabs.ss.platform.jetty.server 1 0 2026-05-30 20:11:11.952
+!MESSAGE Jetty listening on: http://127.0.0.1:40115/
+
+!ENTRY com.silabs.ss.platform.jetty.server 1 0 2026-05-30 20:11:12.323
+!MESSAGE ContentServer started at: 127.0.0.1, 40115
+
+!ENTRY com.silabs.ss.platform.rcp.core 1 0 2026-05-30 20:11:12.392
+!MESSAGE com.silabs.ss.tool.launcher.product found! Writing main studio shared file
+
+!ENTRY org.eclipse.e4.ui.css.swt.theme 4 0 2026-05-30 20:11:13.176
+!MESSAGE A theme with the id 'com.silabs.ss.platform.theme.light' is already registered
+!STACK 0
+java.lang.IllegalArgumentException: A theme with the id 'com.silabs.ss.platform.theme.light' is already registered
+	at org.eclipse.e4.ui.css.swt.internal.theme.ThemeEngine.registerTheme(ThemeEngine.java:260)
+	at org.eclipse.e4.ui.css.swt.internal.theme.ThemeEngine.<init>(ThemeEngine.java:157)
+	at org.eclipse.e4.ui.css.swt.internal.theme.ThemeEngineManager.getEngineForDisplay(ThemeEngineManager.java:39)
+	at org.eclipse.e4.ui.internal.workbench.swt.PartRenderingEngine.createThemeEngine(PartRenderingEngine.java:1403)
+	at org.eclipse.e4.ui.internal.workbench.swt.PartRenderingEngine.initializeStyling(PartRenderingEngine.java:1280)
+	at org.eclipse.e4.ui.internal.workbench.swt.PartRenderingEngine$5.run(PartRenderingEngine.java:1046)
+	at org.eclipse.core.databinding.observable.Realm.runWithDefault(Realm.java:339)
+	at org.eclipse.e4.ui.internal.workbench.swt.PartRenderingEngine.run(PartRenderingEngine.java:1042)
+	at org.eclipse.e4.ui.internal.workbench.E4Workbench.createAndRunUI(E4Workbench.java:153)
+	at org.eclipse.ui.internal.Workbench.lambda$3(Workbench.java:663)
+	at org.eclipse.core.databinding.observable.Realm.runWithDefault(Realm.java:339)
+	at org.eclipse.ui.internal.Workbench.createAndRunWorkbench(Workbench.java:570)
+	at org.eclipse.ui.PlatformUI.createAndRunWorkbench(PlatformUI.java:173)
+	at org.eclipse.ui.internal.ide.application.IDEApplication.start(IDEApplication.java:178)
+	at com.silabs.ss.platform.internal.product.Application.start(Application.java:38)
+	at com.silabs.ss.tool.launcher.internal.product.StudioV5Application.start(StudioV5Application.java:28)
+	at org.eclipse.equinox.internal.app.EclipseAppHandle.run(EclipseAppHandle.java:208)
+	at org.eclipse.core.runtime.internal.adaptor.EclipseAppLauncher.runApplication(EclipseAppLauncher.java:143)
+	at org.eclipse.core.runtime.internal.adaptor.EclipseAppLauncher.start(EclipseAppLauncher.java:109)
+	at org.eclipse.core.runtime.adaptor.EclipseStarter.run(EclipseStarter.java:439)
+	at org.eclipse.core.runtime.adaptor.EclipseStarter.run(EclipseStarter.java:271)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at org.eclipse.equinox.launcher.Main.invokeFramework(Main.java:668)
+	at org.eclipse.equinox.launcher.Main.basicRun(Main.java:605)
+	at org.eclipse.equinox.launcher.Main.run(Main.java:1481)
+	at org.eclipse.equinox.launcher.Main.main(Main.java:1454)
+
+!ENTRY com.silabs.ss.platform.descriptor.core 2 0 2026-05-30 20:11:14.111
+!MESSAGE re-registering property: com.silabs.ss.platform.api.descriptor.core.model.impl.MPropertyImpl@d6a929b (id: universalConfig.compSelProjInstanceId, name: compSelProjInstanceId, label: null, description: specific id for this instance of a project) (propertyScope: ) (id: universalConfig.compSelProjInstanceId, type: String, defaultValueLiteral: null)
+
+!ENTRY com.silabs.ss.platform.content.core 4 0 2026-05-30 20:11:14.467
+!MESSAGE Asset Loading Errors:
+Asset com.silabs.ss.platform.internal.content.core.asset.model.impl.AssetImpl@212c9b7e (version: null, changelog: null, path: /aem/www.silabs.com/documents/public/white-papers/usb-audio-simplified.pdf, diskSizeKB: 0.0, downloadSizeKB: 0.0, directory: false, category: null, label: null, description: null, priority: 0, keywords: null) is missing required properties.  Ignoring...
+Asset com.silabs.ss.platform.internal.content.core.asset.model.impl.AssetImpl@3b0348cc (version: null, changelog: null, path: /aem/www.silabs.com/documents/public/white-papers/mpu_with_rtos.pdf, diskSizeKB: 0.0, downloadSizeKB: 0.0, directory: false, category: null, label: null, description: null, priority: 0, keywords: null) is missing required properties.  Ignoring...
+Asset com.silabs.ss.platform.internal.content.core.asset.model.impl.AssetImpl@2b84bb59 (version: null, changelog: null, path: /aem/www.silabs.com/documents/public/white-papers/microcontroller-peripheral-innovation.pdf, diskSizeKB: 0.0, downloadSizeKB: 0.0, directory: false, category: null, label: null, description: null, priority: 0, keywords: null) is missing required properties.  Ignoring...
+Asset com.silabs.ss.platform.internal.content.core.asset.model.impl.AssetImpl@3c604a95 (version: null, changelog: null, path: /aem/www.silabs.com/documents/public/white-papers/rapid-32-bit-microcontroller-configuration.pdf, diskSizeKB: 0.0, downloadSizeKB: 0.0, directory: false, category: null, label: null, description: null, priority: 0, keywords: null) is missing required properties.  Ignoring...
+Asset com.silabs.ss.platform.internal.content.core.asset.model.impl.AssetImpl@79d2c10c (version: null, changelog: null, path: /aem/www.silabs.com/documents/public/white-papers/Precision32-32-bit-MCU-Family-WP.pdf, diskSizeKB: 0.0, downloadSizeKB: 0.0, directory: false, category: null, label: null, description: null, priority: 0, keywords: null) is missing required properties.  Ignoring...
+Asset com.silabs.ss.platform.internal.content.core.asset.model.impl.AssetImpl@5836b3d2 (version: null, changelog: null, path: /aem/www.silabs.com/documents/public/white-papers/Using-Low-Cost-OTP-Microcontrollers-to-Simplify-Embedded-Applications.pdf, diskSizeKB: 0.0, downloadSizeKB: 0.0, directory: false, category: null, label: null, description: null, priority: 0, keywords: null) is missing required properties.  Ignoring...
+Asset com.silabs.ss.platform.internal.content.core.asset.model.impl.AssetImpl@566695fe (version: null, changelog: null, path: /aem/www.silabs.com/documents/public/white-papers/using-direct-memory-access-for-data-transfers.pdf, diskSizeKB: 0.0, downloadSizeKB: 0.0, directory: false, category: null, label: null, description: null, priority: 0, keywords: null) is missing required properties.  Ignoring...
+
+
+!ENTRY com.silabs.ss.platform.apack.core 1 0 2026-05-30 20:11:19.529
+!MESSAGE Environment modified for executable usb_monitor:
+{LC_TIME=ko_KR.UTF-8, TERMINATOR_UUID=urn:uuid:0355ba58-e03e-42ca-93ff-908a2f5d5ef6, LC_ALL=en_US.UTF-8, GJS_DEBUG_TOPICS=JS ERROR;JS LOG, GJS_DEBUG_OUTPUT=stderr, GNOME_SHELL_SESSION_MODE=ubuntu, FASTRTPS_DEFAULT_PROFILES_FILE=/home/lmh/fastdds_no_shmem.xml, ROS_VERSION=2, IBUS_DISABLE_SNOOPER=1, PATH=/opt/ros/humble/bin:/home/lmh/.local/bin:/home/lmh/.bin:/home/lmh/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin:/snap/bin, LESSCLOSE=/usr/bin/lesspipe %s %s, XDG_MENU_PREFIX=gnome-, LOGNAME=lmh, LS_COLORS=rs=0:di=01;34:ln=01;36:mh=00:pi=40;33:so=01;35:do=01;35:bd=40;33;01:cd=40;33;01:or=40;31;01:mi=00:su=37;41:sg=30;43:ca=30;41:tw=30;42:ow=34;42:st=37;44:ex=01;32:*.tar=01;31:*.tgz=01;31:*.arc=01;31:*.arj=01;31:*.taz=01;31:*.lha=01;31:*.lz4=01;31:*.lzh=01;31:*.lzma=01;31:*.tlz=01;31:*.txz=01;31:*.tzo=01;31:*.t7z=01;31:*.zip=01;31:*.z=01;31:*.dz=01;31:*.gz=01;31:*.lrz=01;31:*.lz=01;31:*.lzo=01;31:*.xz=01;31:*.zst=01;31:*.tzst=01;31:*.bz2=01;31:*.bz=01;31:*.tbz=01;31:*.tbz2=01;31:*.tz=01;31:*.deb=01;31:*.rpm=01;31:*.jar=01;31:*.war=01;31:*.ear=01;31:*.sar=01;31:*.rar=01;31:*.alz=01;31:*.ace=01;31:*.zoo=01;31:*.cpio=01;31:*.7z=01;31:*.rz=01;31:*.cab=01;31:*.wim=01;31:*.swm=01;31:*.dwm=01;31:*.esd=01;31:*.jpg=01;35:*.jpeg=01;35:*.mjpg=01;35:*.mjpeg=01;35:*.gif=01;35:*.bmp=01;35:*.pbm=01;35:*.pgm=01;35:*.ppm=01;35:*.tga=01;35:*.xbm=01;35:*.xpm=01;35:*.tif=01;35:*.tiff=01;35:*.png=01;35:*.svg=01;35:*.svgz=01;35:*.mng=01;35:*.pcx=01;35:*.mov=01;35:*.mpg=01;35:*.mpeg=01;35:*.m2v=01;35:*.mkv=01;35:*.webm=01;35:*.webp=01;35:*.ogm=01;35:*.mp4=01;35:*.m4v=01;35:*.mp4v=01;35:*.vob=01;35:*.qt=01;35:*.nuv=01;35:*.wmv=01;35:*.asf=01;35:*.rm=01;35:*.rmvb=01;35:*.flc=01;35:*.avi=01;35:*.fli=01;35:*.flv=01;35:*.gl=01;35:*.dl=01;35:*.xcf=01;35:*.xwd=01;35:*.yuv=01;35:*.cgm=01;35:*.emf=01;35:*.ogv=01;35:*.ogx=01;35:*.aac=00;36:*.au=00;36:*.flac=00;36:*.m4a=00;36:*.mid=00;36:*.midi=00;36:*.mka=00;36:*.mp3=00;36:*.mpc=00;36:*.ogg=00;36:*.ra=00;36:*.wav=00;36:*.oga=00;36:*.opus=00;36:*.spx=00;36:*.xspf=00;36:, XDG_CONFIG_DIRS=/etc/xdg/xdg-ubuntu:/etc/xdg, ROS_LOCALHOST_ONLY=1, WAYLAND_DISPLAY=wayland-0, XAUTHORITY=/run/user/1000/.mutter-Xwaylandauth.7K0YP3, LC_PAPER=ko_KR.UTF-8, LC_MEASUREMENT=ko_KR.UTF-8, TERMINATOR_DBUS_PATH=/net/tenshu/Terminator2, XMODIFIERS=@im=ibus, GIO_LAUNCHED_DESKTOP_FILE_PID=2216, GIO_LAUNCHED_DESKTOP_FILE=/usr/share/applications/terminator.desktop, QT_ACCESSIBILITY=1, LD_LIBRARY_PATH=/home/lmh/SimplicityStudio_v5/developer/adapter_packs/usb:/opt/ros/humble/opt/rviz_ogre_vendor/lib:/opt/ros/humble/lib/x86_64-linux-gnu:/opt/ros/humble/lib:/opt/openrobots/lib, XDG_SESSION_DESKTOP=ubuntu, DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus, LC_TELEPHONE=ko_KR.UTF-8, GNOME_SETUP_DISPLAY=:1, PAPERSIZE=a4, INVOCATION_ID=f344abe54e4c4cb6b1d896dc07e90347, PATH_SCMD=/home/lmh/SimplicityStudio_v5/developer/adapter_packs/commander, TERMINATOR_DBUS_NAME=net.tenshu.Terminator25ef4b219e3b005583550f2b0f9f990c3, RMW_IMPLEMENTATION=rmw_fastrtps_cpp, LC_ADDRESS=ko_KR.UTF-8, OXYGEN_DISABLE_INNER_SHADOWS_HACK=1, CMAKE_PREFIX_PATH=/home/lmh/ros2_ws/install/two_arm_config:/home/lmh/ros2_ws/install/second_config:/home/lmh/ros2_ws/install/one_final_project:/home/lmh/ros2_ws/install/last_config:/home/lmh/ros2_ws/install/first_config:/home/lmh/ros2_ws/install/final_config:/home/lmh/ros2_ws/install/final_project_two_arm:/opt/openrobots:, SSH_AGENT_LAUNCHER=gnome-keyring, USERNAME=lmh, SHLVL=1, LIBOVERLAY_SCROLLBAR=0, PYTHONPATH=/opt/ros/humble/lib/python3.10/site-packages:/opt/ros/humble/local/lib/python3.10/dist-packages, XDG_DATA_DIRS=/usr/share/ubuntu:/usr/local/share/:/usr/share/:/var/lib/snapd/desktop, SHELL=/bin/bash, COLCON_PREFIX_PATH=/home/lmh/ros2_ws/install, SESSION_MANAGER=local/lmh-940XFG:@/tmp/.ICE-unix/1328,unix/lmh-940XFG:/tmp/.ICE-unix/1328, XDG_SESSION_CLASS=user, COLORTERM=truecolor, GTK_MODULES=gail:atk-bridge, LC_IDENTIFICATION=ko_KR.UTF-8, PKG_CONFIG_PATH=/opt/openrobots/lib/pkgconfig:, STM32CubeMX_PATH=/home/lmh/STM32CubeMX, DISPLAY=:0, HOME=/home/lmh, XDG_CURRENT_DESKTOP=ubuntu:GNOME, TERM=xterm-256color, AMENT_PREFIX_PATH=/home/lmh/ros2_ws/install/two_arm_config:/home/lmh/ros2_ws/install/second_config:/home/lmh/ros2_ws/install/one_final_project:/home/lmh/ros2_ws/install/last_config:/home/lmh/ros2_ws/install/first_config:/home/lmh/ros2_ws/install/final_config:/home/lmh/ros2_ws/install/final_project_two_arm:/opt/ros/humble, LC_NUMERIC=ko_KR.UTF-8, QT_IM_MODULE=ibus, LC_NAME=ko_KR.UTF-8, LANG=ko_KR.UTF-8, GDMSESSION=ubuntu, LESSOPEN=| /usr/bin/lesspipe %s, GNOME_DESKTOP_SESSION_ID=this-is-deprecated, ROS_DISTRO=humble, LANGUAGE=ko:en, ROS_PYTHON_VERSION=3, IM_CONFIG_PHASE=1, SYSTEMD_EXEC_PID=1366, SSH_AUTH_SOCK=/run/user/1000/keyring/ssh, XDG_RUNTIME_DIR=/run/user/1000, OLDPWD=/home/lmh/ros2_ws, GDK_BACKEND=x11, MANAGERPID=1116, DESKTOP_SESSION=ubuntu, USER=lmh, XDG_SESSION_TYPE=wayland, LC_MONETARY=ko_KR.UTF-8, PWD=/home/lmh/SimplicityStudio_v5, VTE_VERSION=6800, _=./studiowayland.sh, GDK_CORE_DEVICE_EVENTS=1, JOURNAL_STREAM=8:20034}
+
+!ENTRY org.eclipse.core.jobs 4 2 2026-05-30 20:11:20.328
+!MESSAGE Deadlock detected. All locks owned by thread Worker-15: Adding project listener: AbstractCProjectListener will be suspended.
+!STACK 0
+java.lang.IllegalStateException
+	at org.eclipse.core.internal.jobs.DeadlockDetector.reportDeadlock(DeadlockDetector.java:624)
+	at org.eclipse.core.internal.jobs.DeadlockDetector.lockWaitStart(DeadlockDetector.java:413)
+	at org.eclipse.core.internal.jobs.LockManager.addLockWaitThread(LockManager.java:143)
+	at org.eclipse.core.internal.jobs.OrderedLock.doAcquire(OrderedLock.java:189)
+	at org.eclipse.core.internal.jobs.OrderedLock.acquire(OrderedLock.java:125)
+	at org.eclipse.core.internal.jobs.OrderedLock.acquire(OrderedLock.java:100)
+	at org.eclipse.core.internal.jobs.OrderedLock.acquire(OrderedLock.java:87)
+	at org.eclipse.cdt.internal.core.CConfigBasedDescriptor.getProjectStorageElement(CConfigBasedDescriptor.java:442)
+	at org.eclipse.cdt.make.internal.core.scannerconfig2.ScannerConfigInfoFactory2$ScannerConfigInfoSet.load(ScannerConfigInfoFactory2.java:103)
+	at org.eclipse.cdt.make.internal.core.scannerconfig2.ScannerConfigInfoFactory2$ScannerConfigInfoSet.<init>(ScannerConfigInfoFactory2.java:96)
+	at org.eclipse.cdt.make.internal.core.scannerconfig2.ScannerConfigInfoFactory2.createInfoSet(ScannerConfigInfoFactory2.java:1373)
+	at org.eclipse.cdt.make.internal.core.scannerconfig2.ScannerConfigProfileManager.createScannerConfigBuildInfo2Set(ScannerConfigProfileManager.java:223)
+	at org.eclipse.cdt.build.internal.core.scannerconfig2.CfgScannerConfigInfoFactory2$CfgInfo.getContainer(CfgScannerConfigInfoFactory2.java:118)
+	at org.eclipse.cdt.build.internal.core.scannerconfig2.CfgScannerConfigInfoFactory2$CfgInfo.createMap(CfgScannerConfigInfoFactory2.java:144)
+	at org.eclipse.cdt.build.internal.core.scannerconfig2.CfgScannerConfigInfoFactory2$CfgInfo.getInfo(CfgScannerConfigInfoFactory2.java:83)
+	at org.eclipse.cdt.build.internal.core.scannerconfig.CfgDiscoveredPathManager.getContextInfo(CfgDiscoveredPathManager.java:433)
+	at org.eclipse.cdt.build.internal.core.scannerconfig.CfgDiscoveredPathManager.getContextInfo(CfgDiscoveredPathManager.java:418)
+	at org.eclipse.cdt.build.internal.core.scannerconfig.CfgDiscoveredPathManager.getDiscoveredInfo(CfgDiscoveredPathManager.java:168)
+	at org.eclipse.cdt.managedbuilder.internal.dataprovider.ProfileInfoProvider.getEntryValues(ProfileInfoProvider.java:68)
+	at org.eclipse.cdt.managedbuilder.internal.dataprovider.BuildEntryStorage.getDiscoveredEntries(BuildEntryStorage.java:203)
+	at org.eclipse.cdt.managedbuilder.internal.dataprovider.BuildEntryStorage.putEntriesToLevel(BuildEntryStorage.java:193)
+	at org.eclipse.cdt.core.settings.model.util.AbstractEntryStorage.initCache(AbstractEntryStorage.java:74)
+	at org.eclipse.cdt.core.settings.model.util.AbstractEntryStorage.getEntries(AbstractEntryStorage.java:37)
+	at org.eclipse.cdt.managedbuilder.internal.dataprovider.BuildLanguageData.getEntries(BuildLanguageData.java:163)
+	at org.eclipse.cdt.core.settings.model.extension.impl.CDefaultLanguageData.getEntriesToCopy(CDefaultLanguageData.java:100)
+	at org.eclipse.cdt.core.settings.model.extension.impl.CDefaultLanguageData.createStore(CDefaultLanguageData.java:91)
+	at org.eclipse.cdt.core.settings.model.extension.impl.CDefaultLanguageData.copySettingsFrom(CDefaultLanguageData.java:84)
+	at org.eclipse.cdt.internal.core.settings.model.CLanguageSettingCache.copySettingsFrom(CLanguageSettingCache.java:49)
+	at org.eclipse.cdt.internal.core.settings.model.CLanguageSettingCache.<init>(CLanguageSettingCache.java:38)
+	at org.eclipse.cdt.internal.core.settings.model.CFolderDescriptionCache.copyLanguageData(CFolderDescriptionCache.java:82)
+	at org.eclipse.cdt.core.settings.model.extension.impl.CDefaultFolderData.copyDataFrom(CDefaultFolderData.java:60)
+	at org.eclipse.cdt.internal.core.settings.model.CFolderDescriptionCache.<init>(CFolderDescriptionCache.java:40)
+	at org.eclipse.cdt.internal.core.settings.model.CConfigurationDescriptionCache.copyFolderData(CConfigurationDescriptionCache.java:242)
+	at org.eclipse.cdt.core.settings.model.extension.impl.CDefaultConfigurationData.copySettingsFrom(CDefaultConfigurationData.java:117)
+	at org.eclipse.cdt.internal.core.settings.model.CConfigurationDescriptionCache.loadData(CConfigurationDescriptionCache.java:154)
+	at org.eclipse.cdt.internal.core.settings.model.CProjectDescription.loadDatas(CProjectDescription.java:199)
+	at org.eclipse.cdt.internal.core.settings.model.xml.XmlProjectDescriptionStorage.loadProjectDescription(XmlProjectDescriptionStorage.java:509)
+	at org.eclipse.cdt.internal.core.settings.model.xml.XmlProjectDescriptionStorage.getProjectDescription(XmlProjectDescriptionStorage.java:239)
+	at org.eclipse.cdt.internal.core.settings.model.CProjectDescriptionManager.getProjectDescriptionInternal(CProjectDescriptionManager.java:426)
+	at org.eclipse.cdt.internal.core.settings.model.CProjectDescriptionManager.getProjectDescription(CProjectDescriptionManager.java:408)
+	at org.eclipse.cdt.internal.core.settings.model.CProjectDescriptionManager.getProjectDescription(CProjectDescriptionManager.java:402)
+	at org.eclipse.cdt.internal.core.settings.model.CProjectDescriptionManager.getProjectDescription(CProjectDescriptionManager.java:395)
+	at org.eclipse.cdt.core.CCorePlugin.getProjectDescription(CCorePlugin.java:1464)
+	at com.iar.cdt.generic.toolchain.project.AbstractCProjectListener$1.run(AbstractCProjectListener.java:147)
+	at org.eclipse.core.internal.jobs.Worker.run(Worker.java:63)
+!SUBENTRY 1 org.eclipse.core.jobs 4 2 2026-05-30 20:11:20.329
+!MESSAGE Thread Worker-15: Adding project listener: AbstractCProjectListener has locks: OrderedLock (21) and is waiting for lock OrderedLock (23)
+	at java.base/java.lang.Thread.getStackTrace(Thread.java:2451)
+	at org.eclipse.core.internal.jobs.DeadlockDetector.reportDeadlock(DeadlockDetector.java:638)
+	at org.eclipse.core.internal.jobs.DeadlockDetector.lockWaitStart(DeadlockDetector.java:413)
+	at org.eclipse.core.internal.jobs.LockManager.addLockWaitThread(LockManager.java:143)
+	at org.eclipse.core.internal.jobs.OrderedLock.doAcquire(OrderedLock.java:189)
+	at org.eclipse.core.internal.jobs.OrderedLock.acquire(OrderedLock.java:125)
+	at org.eclipse.core.internal.jobs.OrderedLock.acquire(OrderedLock.java:100)
+	at org.eclipse.core.internal.jobs.OrderedLock.acquire(OrderedLock.java:87)
+	at org.eclipse.cdt.internal.core.CConfigBasedDescriptor.getProjectStorageElement(CConfigBasedDescriptor.java:442)
+	at org.eclipse.cdt.make.internal.core.scannerconfig2.ScannerConfigInfoFactory2$ScannerConfigInfoSet.load(ScannerConfigInfoFactory2.java:103)
+	at org.eclipse.cdt.make.internal.core.scannerconfig2.ScannerConfigInfoFactory2$ScannerConfigInfoSet.<init>(ScannerConfigInfoFactory2.java:96)
+	at org.eclipse.cdt.make.internal.core.scannerconfig2.ScannerConfigInfoFactory2.createInfoSet(ScannerConfigInfoFactory2.java:1373)
+	at org.eclipse.cdt.make.internal.core.scannerconfig2.ScannerConfigProfileManager.createScannerConfigBuildInfo2Set(ScannerConfigProfileManager.java:223)
+	at org.eclipse.cdt.build.internal.core.scannerconfig2.CfgScannerConfigInfoFactory2$CfgInfo.getContainer(CfgScannerConfigInfoFactory2.java:118)
+	at org.eclipse.cdt.build.internal.core.scannerconfig2.CfgScannerConfigInfoFactory2$CfgInfo.createMap(CfgScannerConfigInfoFactory2.java:144)
+	at org.eclipse.cdt.build.internal.core.scannerconfig2.CfgScannerConfigInfoFactory2$CfgInfo.getInfo(CfgScannerConfigInfoFactory2.java:83)
+	at org.eclipse.cdt.build.internal.core.scannerconfig.CfgDiscoveredPathManager.getContextInfo(CfgDiscoveredPathManager.java:433)
+	at org.eclipse.cdt.build.internal.core.scannerconfig.CfgDiscoveredPathManager.getContextInfo(CfgDiscoveredPathManager.java:418)
+	at org.eclipse.cdt.build.internal.core.scannerconfig.CfgDiscoveredPathManager.getDiscoveredInfo(CfgDiscoveredPathManager.java:168)
+	at org.eclipse.cdt.managedbuilder.internal.dataprovider.ProfileInfoProvider.getEntryValues(ProfileInfoProvider.java:68)
+	at org.eclipse.cdt.managedbuilder.internal.dataprovider.BuildEntryStorage.getDiscoveredEntries(BuildEntryStorage.java:203)
+	at org.eclipse.cdt.managedbuilder.internal.dataprovider.BuildEntryStorage.putEntriesToLevel(BuildEntryStorage.java:193)
+	at org.eclipse.cdt.core.settings.model.util.AbstractEntryStorage.initCache(AbstractEntryStorage.java:74)
+	at org.eclipse.cdt.core.settings.model.util.AbstractEntryStorage.getEntries(AbstractEntryStorage.java:37)
+	at org.eclipse.cdt.managedbuilder.internal.dataprovider.BuildLanguageData.getEntries(BuildLanguageData.java:163)
+	at org.eclipse.cdt.core.settings.model.extension.impl.CDefaultLanguageData.getEntriesToCopy(CDefaultLanguageData.java:100)
+	at org.eclipse.cdt.core.settings.model.extension.impl.CDefaultLanguageData.createStore(CDefaultLanguageData.java:91)
+	at org.eclipse.cdt.core.settings.model.extension.impl.CDefaultLanguageData.copySettingsFrom(CDefaultLanguageData.java:84)
+	at org.eclipse.cdt.internal.core.settings.model.CLanguageSettingCache.copySettingsFrom(CLanguageSettingCache.java:49)
+	at org.eclipse.cdt.internal.core.settings.model.CLanguageSettingCache.<init>(CLanguageSettingCache.java:38)
+	at org.eclipse.cdt.internal.core.settings.model.CFolderDescriptionCache.copyLanguageData(CFolderDescriptionCache.java:82)
+	at org.eclipse.cdt.core.settings.model.extension.impl.CDefaultFolderData.copyDataFrom(CDefaultFolderData.java:60)
+	at org.eclipse.cdt.internal.core.settings.model.CFolderDescriptionCache.<init>(CFolderDescriptionCache.java:40)
+	at org.eclipse.cdt.internal.core.settings.model.CConfigurationDescriptionCache.copyFolderData(CConfigurationDescriptionCache.java:242)
+	at org.eclipse.cdt.core.settings.model.extension.impl.CDefaultConfigurationData.copySettingsFrom(CDefaultConfigurationData.java:117)
+	at org.eclipse.cdt.internal.core.settings.model.CConfigurationDescriptionCache.loadData(CConfigurationDescriptionCache.java:154)
+	at org.eclipse.cdt.internal.core.settings.model.CProjectDescription.loadDatas(CProjectDescription.java:199)
+	at org.eclipse.cdt.internal.core.settings.model.xml.XmlProjectDescriptionStorage.loadProjectDescription(XmlProjectDescriptionStorage.java:509)
+	at org.eclipse.cdt.internal.core.settings.model.xml.XmlProjectDescriptionStorage.getProjectDescription(XmlProjectDescriptionStorage.java:239)
+	at org.eclipse.cdt.internal.core.settings.model.CProjectDescriptionManager.getProjectDescriptionInternal(CProjectDescriptionManager.java:426)
+	at org.eclipse.cdt.internal.core.settings.model.CProjectDescriptionManager.getProjectDescription(CProjectDescriptionManager.java:408)
+	at org.eclipse.cdt.internal.core.settings.model.CProjectDescriptionManager.getProjectDescription(CProjectDescriptionManager.java:402)
+	at org.eclipse.cdt.internal.core.settings.model.CProjectDescriptionManager.getProjectDescription(CProjectDescriptionManager.java:395)
+	at org.eclipse.cdt.core.CCorePlugin.getProjectDescription(CCorePlugin.java:1464)
+	at com.iar.cdt.generic.toolchain.project.AbstractCProjectListener$1.run(AbstractCProjectListener.java:147)
+	at org.eclipse.core.internal.jobs.Worker.run(Worker.java:63)
+
+!SUBENTRY 1 org.eclipse.core.jobs 4 2 2026-05-30 20:11:20.329
+!MESSAGE Thread Worker-6: Adding project listener: AbstractCProjectListener has locks: OrderedLock (23) and is waiting for lock OrderedLock (21)
+	at java.base/java.lang.Object.wait0(Native Method)
+	at java.base/java.lang.Object.wait(Object.java:366)
+	at org.eclipse.core.internal.jobs.Semaphore.acquire(Semaphore.java:45)
+	at org.eclipse.core.internal.jobs.OrderedLock.doAcquire(OrderedLock.java:191)
+	at org.eclipse.core.internal.jobs.OrderedLock.acquire(OrderedLock.java:125)
+	at org.eclipse.core.internal.jobs.OrderedLock.acquire(OrderedLock.java:100)
+	at org.eclipse.core.internal.jobs.OrderedLock.acquire(OrderedLock.java:87)
+	at org.eclipse.cdt.internal.core.settings.model.xml.XmlProjectDescriptionStorage.getProjectDescription(XmlProjectDescriptionStorage.java:232)
+	at org.eclipse.cdt.internal.core.settings.model.CProjectDescriptionManager.getProjectDescriptionInternal(CProjectDescriptionManager.java:426)
+	at org.eclipse.cdt.internal.core.settings.model.CProjectDescriptionManager.getProjectDescription(CProjectDescriptionManager.java:408)
+	at org.eclipse.cdt.internal.core.settings.model.CProjectDescriptionManager.getProjectDescription(CProjectDescriptionManager.java:402)
+	at org.eclipse.cdt.internal.core.settings.model.CProjectDescriptionManager.getProjectDescription(CProjectDescriptionManager.java:395)
+	at org.eclipse.cdt.internal.core.CConfigBasedDescriptorManager.doHandleEvent(CConfigBasedDescriptorManager.java:478)
+	at org.eclipse.cdt.internal.core.CConfigBasedDescriptorManager$1.handleEvent(CConfigBasedDescriptorManager.java:442)
+	at org.eclipse.cdt.internal.core.settings.model.CProjectDescriptionManager.notifyListeners(CProjectDescriptionManager.java:2190)
+	at org.eclipse.cdt.internal.core.settings.model.AbstractCProjectDescriptionStorage.fireLoadedEvent(AbstractCProjectDescriptionStorage.java:272)
+	at org.eclipse.cdt.internal.core.settings.model.xml.XmlProjectDescriptionStorage.getProjectDescription(XmlProjectDescriptionStorage.java:266)
+	at org.eclipse.cdt.internal.core.settings.model.CProjectDescriptionManager.getProjectDescriptionInternal(CProjectDescriptionManager.java:426)
+	at org.eclipse.cdt.internal.core.settings.model.CProjectDescriptionManager.getProjectDescription(CProjectDescriptionManager.java:408)
+	at org.eclipse.cdt.internal.core.settings.model.CProjectDescriptionManager.getProjectDescription(CProjectDescriptionManager.java:402)
+	at org.eclipse.cdt.internal.core.settings.model.CProjectDescriptionManager.getProjectDescription(CProjectDescriptionManager.java:395)
+	at org.eclipse.cdt.core.CCorePlugin.getProjectDescription(CCorePlugin.java:1464)
+	at com.iar.cdt.generic.toolchain.project.AbstractCProjectListener$1.run(AbstractCProjectListener.java:147)
+	at org.eclipse.core.internal.jobs.Worker.run(Worker.java:63)
+
+
+!ENTRY com.silabs.ss.tool.installer.core 1 0 2026-05-30 20:11:20.822
+!MESSAGE isInternalNetwork: false
+
+!ENTRY com.silabs.ss.platform.apack.core 1 0 2026-05-30 20:11:23.237
+!MESSAGE AdapterPack USB adapter pack has setupcheck function type 
+
+!ENTRY com.silabs.ss.platform.apack.core 1 0 2026-05-30 20:11:23.238
+!MESSAGE AdapterPack USB adapter pack has setupcheck function, executing
+
+!ENTRY org.eclipse.core.resources 4 2 2026-05-30 20:12:17.994
+!MESSAGE Problems occurred when invoking code from plug-in: "org.eclipse.core.resources".
+!STACK 0
+org.eclipse.swt.SWTException: Device is disposed
+	at org.eclipse.swt.SWT.error(SWT.java:4922)
+	at org.eclipse.swt.SWT.error(SWT.java:4837)
+	at org.eclipse.swt.SWT.error(SWT.java:4808)
+	at org.eclipse.swt.widgets.Display.error(Display.java:1553)
+	at org.eclipse.swt.widgets.Display.asyncExec(Display.java:920)
+	at com.silabs.ss.app.internal.ide.ui.AppBuilderEditorCloser.resourceChanged(AppBuilderEditorCloser.java:49)
+	at org.eclipse.core.internal.events.NotificationManager$1.run(NotificationManager.java:321)
+	at org.eclipse.core.runtime.SafeRunner.run(SafeRunner.java:47)
+	at org.eclipse.core.internal.events.NotificationManager.notify(NotificationManager.java:311)
+	at org.eclipse.core.internal.events.NotificationManager.broadcastChanges(NotificationManager.java:174)
+	at org.eclipse.core.internal.resources.Workspace.broadcastPostChange(Workspace.java:465)
+	at org.eclipse.core.internal.resources.Workspace.endOperation(Workspace.java:1593)
+	at org.eclipse.core.internal.resources.InternalWorkspaceJob.run(InternalWorkspaceJob.java:50)
+	at org.eclipse.core.internal.jobs.Worker.run(Worker.java:63)
+
+!ENTRY org.eclipse.core.jobs 2 2 2026-05-30 20:12:18.888
+!MESSAGE Job found still running after platform shutdown.  Jobs should be canceled by the plugin that scheduled them during shutdown: com.silabs.ss.tool.internal.installer.core.updates.UpdateManager$1 RUNNING
+	 at java.base/java.lang.Thread.sleep0(Native Method)
+	 at java.base/java.lang.Thread.sleep(Thread.java:509)
+	 at com.silabs.ss.tool.internal.installer.core.MetadataRegistryLoadListener.waitForMetadataRegistry(MetadataRegistryLoadListener.java:21)
+	 at com.silabs.ss.tool.internal.api.installer.core.InstallerUtils.ensurePackagesFetched(InstallerUtils.java:1921)
+	 at com.silabs.ss.tool.internal.installer.core.updates.UpdateManager.updatePackageMetadata(UpdateManager.java:236)
+	 at com.silabs.ss.tool.internal.installer.core.updates.UpdateManager.ensureUpdatesFetched(UpdateManager.java:306)
+	 at com.silabs.ss.tool.internal.installer.core.updates.UpdateManager$1.run(UpdateManager.java:189)
+	 at org.eclipse.core.internal.jobs.Worker.run(Worker.java:63)
+!SESSION 2026-06-01 01:46:57.906 -----------------------------------------------
+eclipse.buildId=unknown
+java.version=21.0.5
+java.vendor=Amazon.com Inc.
+BootLoader constants: OS=linux, ARCH=x86_64, WS=gtk, NL=en_US
+Command-line arguments:  -os linux -ws gtk -arch x86_64
+
+!ENTRY com.silabs.ss.platform.rcp.core 2 0 2026-06-01 01:46:58.868
+!MESSAGE Logging bundle not found: com.silabs.ss.logger, logging not initialized.
+
+!ENTRY com.silabs.ss.platform.jetty.server 1 0 2026-06-01 01:46:59.998
+!MESSAGE Jetty listening on: http://127.0.0.1:40043/
+
+!ENTRY com.silabs.ss.platform.jetty.server 1 0 2026-06-01 01:47:00.339
+!MESSAGE ContentServer started at: 127.0.0.1, 40043
+
+!ENTRY com.silabs.ss.platform.rcp.core 1 0 2026-06-01 01:47:00.386
+!MESSAGE com.silabs.ss.tool.launcher.product found! Writing main studio shared file
+
+!ENTRY org.eclipse.e4.ui.css.swt.theme 4 0 2026-06-01 01:47:01.092
+!MESSAGE A theme with the id 'com.silabs.ss.platform.theme.light' is already registered
+!STACK 0
+java.lang.IllegalArgumentException: A theme with the id 'com.silabs.ss.platform.theme.light' is already registered
+	at org.eclipse.e4.ui.css.swt.internal.theme.ThemeEngine.registerTheme(ThemeEngine.java:260)
+	at org.eclipse.e4.ui.css.swt.internal.theme.ThemeEngine.<init>(ThemeEngine.java:157)
+	at org.eclipse.e4.ui.css.swt.internal.theme.ThemeEngineManager.getEngineForDisplay(ThemeEngineManager.java:39)
+	at org.eclipse.e4.ui.internal.workbench.swt.PartRenderingEngine.createThemeEngine(PartRenderingEngine.java:1403)
+	at org.eclipse.e4.ui.internal.workbench.swt.PartRenderingEngine.initializeStyling(PartRenderingEngine.java:1280)
+	at org.eclipse.e4.ui.internal.workbench.swt.PartRenderingEngine$5.run(PartRenderingEngine.java:1046)
+	at org.eclipse.core.databinding.observable.Realm.runWithDefault(Realm.java:339)
+	at org.eclipse.e4.ui.internal.workbench.swt.PartRenderingEngine.run(PartRenderingEngine.java:1042)
+	at org.eclipse.e4.ui.internal.workbench.E4Workbench.createAndRunUI(E4Workbench.java:153)
+	at org.eclipse.ui.internal.Workbench.lambda$3(Workbench.java:663)
+	at org.eclipse.core.databinding.observable.Realm.runWithDefault(Realm.java:339)
+	at org.eclipse.ui.internal.Workbench.createAndRunWorkbench(Workbench.java:570)
+	at org.eclipse.ui.PlatformUI.createAndRunWorkbench(PlatformUI.java:173)
+	at org.eclipse.ui.internal.ide.application.IDEApplication.start(IDEApplication.java:178)
+	at com.silabs.ss.platform.internal.product.Application.start(Application.java:38)
+	at com.silabs.ss.tool.launcher.internal.product.StudioV5Application.start(StudioV5Application.java:28)
+	at org.eclipse.equinox.internal.app.EclipseAppHandle.run(EclipseAppHandle.java:208)
+	at org.eclipse.core.runtime.internal.adaptor.EclipseAppLauncher.runApplication(EclipseAppLauncher.java:143)
+	at org.eclipse.core.runtime.internal.adaptor.EclipseAppLauncher.start(EclipseAppLauncher.java:109)
+	at org.eclipse.core.runtime.adaptor.EclipseStarter.run(EclipseStarter.java:439)
+	at org.eclipse.core.runtime.adaptor.EclipseStarter.run(EclipseStarter.java:271)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at org.eclipse.equinox.launcher.Main.invokeFramework(Main.java:668)
+	at org.eclipse.equinox.launcher.Main.basicRun(Main.java:605)
+	at org.eclipse.equinox.launcher.Main.run(Main.java:1481)
+	at org.eclipse.equinox.launcher.Main.main(Main.java:1454)
+
+!ENTRY com.silabs.ss.platform.descriptor.core 2 0 2026-06-01 01:47:01.825
+!MESSAGE re-registering property: com.silabs.ss.platform.api.descriptor.core.model.impl.MPropertyImpl@d6a929b (id: universalConfig.compSelProjInstanceId, name: compSelProjInstanceId, label: null, description: specific id for this instance of a project) (propertyScope: ) (id: universalConfig.compSelProjInstanceId, type: String, defaultValueLiteral: null)
+
+!ENTRY com.silabs.ss.platform.content.core 4 0 2026-06-01 01:47:02.210
+!MESSAGE Asset Loading Errors:
+Asset com.silabs.ss.platform.internal.content.core.asset.model.impl.AssetImpl@510db973 (version: null, changelog: null, path: /aem/www.silabs.com/documents/public/white-papers/usb-audio-simplified.pdf, diskSizeKB: 0.0, downloadSizeKB: 0.0, directory: false, category: null, label: null, description: null, priority: 0, keywords: null) is missing required properties.  Ignoring...
+Asset com.silabs.ss.platform.internal.content.core.asset.model.impl.AssetImpl@d61c8d9 (version: null, changelog: null, path: /aem/www.silabs.com/documents/public/white-papers/mpu_with_rtos.pdf, diskSizeKB: 0.0, downloadSizeKB: 0.0, directory: false, category: null, label: null, description: null, priority: 0, keywords: null) is missing required properties.  Ignoring...
+Asset com.silabs.ss.platform.internal.content.core.asset.model.impl.AssetImpl@e296017 (version: null, changelog: null, path: /aem/www.silabs.com/documents/public/white-papers/microcontroller-peripheral-innovation.pdf, diskSizeKB: 0.0, downloadSizeKB: 0.0, directory: false, category: null, label: null, description: null, priority: 0, keywords: null) is missing required properties.  Ignoring...
+Asset com.silabs.ss.platform.internal.content.core.asset.model.impl.AssetImpl@52dea0f (version: null, changelog: null, path: /aem/www.silabs.com/documents/public/white-papers/rapid-32-bit-microcontroller-configuration.pdf, diskSizeKB: 0.0, downloadSizeKB: 0.0, directory: false, category: null, label: null, description: null, priority: 0, keywords: null) is missing required properties.  Ignoring...
+Asset com.silabs.ss.platform.internal.content.core.asset.model.impl.AssetImpl@39571df8 (version: null, changelog: null, path: /aem/www.silabs.com/documents/public/white-papers/Precision32-32-bit-MCU-Family-WP.pdf, diskSizeKB: 0.0, downloadSizeKB: 0.0, directory: false, category: null, label: null, description: null, priority: 0, keywords: null) is missing required properties.  Ignoring...
+Asset com.silabs.ss.platform.internal.content.core.asset.model.impl.AssetImpl@3a733d0b (version: null, changelog: null, path: /aem/www.silabs.com/documents/public/white-papers/Using-Low-Cost-OTP-Microcontrollers-to-Simplify-Embedded-Applications.pdf, diskSizeKB: 0.0, downloadSizeKB: 0.0, directory: false, category: null, label: null, description: null, priority: 0, keywords: null) is missing required properties.  Ignoring...
+Asset com.silabs.ss.platform.internal.content.core.asset.model.impl.AssetImpl@7f1fcb8a (version: null, changelog: null, path: /aem/www.silabs.com/documents/public/white-papers/using-direct-memory-access-for-data-transfers.pdf, diskSizeKB: 0.0, downloadSizeKB: 0.0, directory: false, category: null, label: null, description: null, priority: 0, keywords: null) is missing required properties.  Ignoring...
+
+
+!ENTRY com.silabs.ss.platform.apack.core 1 0 2026-06-01 01:47:07.457
+!MESSAGE Environment modified for executable usb_monitor:
+{LC_TIME=ko_KR.UTF-8, TERMINATOR_UUID=urn:uuid:4b7d203a-c9cc-40b5-8eae-68181fa9d1ac, LC_ALL=en_US.UTF-8, GJS_DEBUG_TOPICS=JS ERROR;JS LOG, GJS_DEBUG_OUTPUT=stderr, GNOME_SHELL_SESSION_MODE=ubuntu, FASTRTPS_DEFAULT_PROFILES_FILE=/home/lmh/fastdds_no_shmem.xml, IBUS_DISABLE_SNOOPER=1, PATH=/home/lmh/.local/bin:/home/lmh/.bin:/home/lmh/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin:/snap/bin, LESSCLOSE=/usr/bin/lesspipe %s %s, XDG_MENU_PREFIX=gnome-, LOGNAME=lmh, LS_COLORS=rs=0:di=01;34:ln=01;36:mh=00:pi=40;33:so=01;35:do=01;35:bd=40;33;01:cd=40;33;01:or=40;31;01:mi=00:su=37;41:sg=30;43:ca=30;41:tw=30;42:ow=34;42:st=37;44:ex=01;32:*.tar=01;31:*.tgz=01;31:*.arc=01;31:*.arj=01;31:*.taz=01;31:*.lha=01;31:*.lz4=01;31:*.lzh=01;31:*.lzma=01;31:*.tlz=01;31:*.txz=01;31:*.tzo=01;31:*.t7z=01;31:*.zip=01;31:*.z=01;31:*.dz=01;31:*.gz=01;31:*.lrz=01;31:*.lz=01;31:*.lzo=01;31:*.xz=01;31:*.zst=01;31:*.tzst=01;31:*.bz2=01;31:*.bz=01;31:*.tbz=01;31:*.tbz2=01;31:*.tz=01;31:*.deb=01;31:*.rpm=01;31:*.jar=01;31:*.war=01;31:*.ear=01;31:*.sar=01;31:*.rar=01;31:*.alz=01;31:*.ace=01;31:*.zoo=01;31:*.cpio=01;31:*.7z=01;31:*.rz=01;31:*.cab=01;31:*.wim=01;31:*.swm=01;31:*.dwm=01;31:*.esd=01;31:*.jpg=01;35:*.jpeg=01;35:*.mjpg=01;35:*.mjpeg=01;35:*.gif=01;35:*.bmp=01;35:*.pbm=01;35:*.pgm=01;35:*.ppm=01;35:*.tga=01;35:*.xbm=01;35:*.xpm=01;35:*.tif=01;35:*.tiff=01;35:*.png=01;35:*.svg=01;35:*.svgz=01;35:*.mng=01;35:*.pcx=01;35:*.mov=01;35:*.mpg=01;35:*.mpeg=01;35:*.m2v=01;35:*.mkv=01;35:*.webm=01;35:*.webp=01;35:*.ogm=01;35:*.mp4=01;35:*.m4v=01;35:*.mp4v=01;35:*.vob=01;35:*.qt=01;35:*.nuv=01;35:*.wmv=01;35:*.asf=01;35:*.rm=01;35:*.rmvb=01;35:*.flc=01;35:*.avi=01;35:*.fli=01;35:*.flv=01;35:*.gl=01;35:*.dl=01;35:*.xcf=01;35:*.xwd=01;35:*.yuv=01;35:*.cgm=01;35:*.emf=01;35:*.ogv=01;35:*.ogx=01;35:*.aac=00;36:*.au=00;36:*.flac=00;36:*.m4a=00;36:*.mid=00;36:*.midi=00;36:*.mka=00;36:*.mp3=00;36:*.mpc=00;36:*.ogg=00;36:*.ra=00;36:*.wav=00;36:*.oga=00;36:*.opus=00;36:*.spx=00;36:*.xspf=00;36:, XDG_CONFIG_DIRS=/etc/xdg/xdg-ubuntu:/etc/xdg, ROS_LOCALHOST_ONLY=1, WAYLAND_DISPLAY=wayland-0, XAUTHORITY=/run/user/1000/.mutter-Xwaylandauth.WZY4P3, LC_PAPER=ko_KR.UTF-8, LC_MEASUREMENT=ko_KR.UTF-8, TERMINATOR_DBUS_PATH=/net/tenshu/Terminator2, XMODIFIERS=@im=ibus, GIO_LAUNCHED_DESKTOP_FILE_PID=16713, GIO_LAUNCHED_DESKTOP_FILE=/usr/share/applications/terminator.desktop, QT_ACCESSIBILITY=1, LD_LIBRARY_PATH=/home/lmh/SimplicityStudio_v5/developer/adapter_packs/usb:/opt/openrobots/lib, XDG_SESSION_DESKTOP=ubuntu, DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus, LC_TELEPHONE=ko_KR.UTF-8, GNOME_SETUP_DISPLAY=:1, PAPERSIZE=a4, INVOCATION_ID=f5163d5508a94f4e9d17db804c11c4fc, PATH_SCMD=/home/lmh/SimplicityStudio_v5/developer/adapter_packs/commander, TERMINATOR_DBUS_NAME=net.tenshu.Terminator25ef4b219e3b005583550f2b0f9f990c3, RMW_IMPLEMENTATION=rmw_fastrtps_cpp, LC_ADDRESS=ko_KR.UTF-8, OXYGEN_DISABLE_INNER_SHADOWS_HACK=1, CMAKE_PREFIX_PATH=/opt/openrobots:, SSH_AGENT_LAUNCHER=gnome-keyring, USERNAME=lmh, SHLVL=1, LIBOVERLAY_SCROLLBAR=0, XDG_DATA_DIRS=/usr/share/ubuntu:/usr/local/share/:/usr/share/:/var/lib/snapd/desktop, SHELL=/bin/bash, SESSION_MANAGER=local/lmh-940XFG:@/tmp/.ICE-unix/1405,unix/lmh-940XFG:/tmp/.ICE-unix/1405, XDG_SESSION_CLASS=user, COLORTERM=truecolor, GTK_MODULES=gail:atk-bridge, LC_IDENTIFICATION=ko_KR.UTF-8, PKG_CONFIG_PATH=/opt/openrobots/lib/pkgconfig:, STM32CubeMX_PATH=/home/lmh/STM32CubeMX, DISPLAY=:0, HOME=/home/lmh, XDG_CURRENT_DESKTOP=ubuntu:GNOME, TERM=xterm-256color, LC_NUMERIC=ko_KR.UTF-8, QT_IM_MODULE=ibus, LC_NAME=ko_KR.UTF-8, LANG=ko_KR.UTF-8, GDMSESSION=ubuntu, LESSOPEN=| /usr/bin/lesspipe %s, GNOME_DESKTOP_SESSION_ID=this-is-deprecated, LANGUAGE=ko:en, IM_CONFIG_PHASE=1, SYSTEMD_EXEC_PID=1437, SSH_AUTH_SOCK=/run/user/1000/keyring/ssh, XDG_RUNTIME_DIR=/run/user/1000, OLDPWD=/home/lmh, GDK_BACKEND=x11, MANAGERPID=1199, DESKTOP_SESSION=ubuntu, USER=lmh, XDG_SESSION_TYPE=wayland, LC_MONETARY=ko_KR.UTF-8, PWD=/home/lmh/SimplicityStudio_v5, VTE_VERSION=6800, _=./studiowayland.sh, GDK_CORE_DEVICE_EVENTS=1, JOURNAL_STREAM=8:8500}
+
+!ENTRY com.silabs.ss.tool.installer.core 1 0 2026-06-01 01:47:08.643
+!MESSAGE isInternalNetwork: false
+
+!ENTRY com.silabs.ss.platform.apack.core 1 0 2026-06-01 01:47:11.825
+!MESSAGE AdapterPack USB adapter pack has setupcheck function type 
+
+!ENTRY com.silabs.ss.platform.apack.core 1 0 2026-06-01 01:47:11.825
+!MESSAGE AdapterPack USB adapter pack has setupcheck function, executing
+
+!ENTRY com.silabs.ss.platform.content.core 4 0 2026-06-01 01:48:35.680
+!MESSAGE Asset Loading Errors:
+Asset com.silabs.ss.platform.internal.content.core.asset.model.impl.AssetImpl@5b7f768a (version: null, changelog: null, path: /aem/www.silabs.com/documents/public/white-papers/usb-audio-simplified.pdf, diskSizeKB: 0.0, downloadSizeKB: 0.0, directory: false, category: null, label: null, description: null, priority: 0, keywords: null) is missing required properties.  Ignoring...
+Asset com.silabs.ss.platform.internal.content.core.asset.model.impl.AssetImpl@2d6401e5 (version: null, changelog: null, path: /aem/www.silabs.com/documents/public/white-papers/mpu_with_rtos.pdf, diskSizeKB: 0.0, downloadSizeKB: 0.0, directory: false, category: null, label: null, description: null, priority: 0, keywords: null) is missing required properties.  Ignoring...
+Asset com.silabs.ss.platform.internal.content.core.asset.model.impl.AssetImpl@208729ad (version: null, changelog: null, path: /aem/www.silabs.com/documents/public/white-papers/microcontroller-peripheral-innovation.pdf, diskSizeKB: 0.0, downloadSizeKB: 0.0, directory: false, category: null, label: null, description: null, priority: 0, keywords: null) is missing required properties.  Ignoring...
+Asset com.silabs.ss.platform.internal.content.core.asset.model.impl.AssetImpl@1cd1a63a (version: null, changelog: null, path: /aem/www.silabs.com/documents/public/white-papers/rapid-32-bit-microcontroller-configuration.pdf, diskSizeKB: 0.0, downloadSizeKB: 0.0, directory: false, category: null, label: null, description: null, priority: 0, keywords: null) is missing required properties.  Ignoring...
+Asset com.silabs.ss.platform.internal.content.core.asset.model.impl.AssetImpl@3c3a480c (version: null, changelog: null, path: /aem/www.silabs.com/documents/public/white-papers/Precision32-32-bit-MCU-Family-WP.pdf, diskSizeKB: 0.0, downloadSizeKB: 0.0, directory: false, category: null, label: null, description: null, priority: 0, keywords: null) is missing required properties.  Ignoring...
+Asset com.silabs.ss.platform.internal.content.core.asset.model.impl.AssetImpl@31dc0d47 (version: null, changelog: null, path: /aem/www.silabs.com/documents/public/white-papers/Using-Low-Cost-OTP-Microcontrollers-to-Simplify-Embedded-Applications.pdf, diskSizeKB: 0.0, downloadSizeKB: 0.0, directory: false, category: null, label: null, description: null, priority: 0, keywords: null) is missing required properties.  Ignoring...
+Asset com.silabs.ss.platform.internal.content.core.asset.model.impl.AssetImpl@280f9090 (version: null, changelog: null, path: /aem/www.silabs.com/documents/public/white-papers/using-direct-memory-access-for-data-transfers.pdf, diskSizeKB: 0.0, downloadSizeKB: 0.0, directory: false, category: null, label: null, description: null, priority: 0, keywords: null) is missing required properties.  Ignoring...
+
+
+!ENTRY com.silabs.ss.tool.installer.core 2 0 2026-06-01 01:48:41.239
+!MESSAGE Problem getting package resources: changelog
+
+!ENTRY com.silabs.ss.tool.installer.core 2 0 2026-06-01 01:48:41.240
+!MESSAGE Problem getting package resources: changelog

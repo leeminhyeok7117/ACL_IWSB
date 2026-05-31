@@ -177,9 +177,6 @@ app_process.o: ../app_process.c \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/driver/leddrv/inc/sl_led.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_gpio.h \
  ../app_process.h \
- /home/lmh/SimplicityStudio/v5_workspace/cubesat_TX/autogen/sl_simple_button_instances.h \
- /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/driver/button/inc/sl_simple_button.h \
- /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/driver/button/inc/sl_button.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/bootloader/api/btl_interface.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/bootloader/api/btl_errorcode.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/bootloader/api/btl_reset_info.h \
@@ -372,9 +369,6 @@ app_process.o: ../app_process.c \
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/driver/leddrv/inc/sl_led.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_gpio.h:
 ../app_process.h:
-/home/lmh/SimplicityStudio/v5_workspace/cubesat_TX/autogen/sl_simple_button_instances.h:
-/home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/driver/button/inc/sl_simple_button.h:
-/home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/driver/button/inc/sl_button.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/bootloader/api/btl_interface.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/bootloader/api/btl_errorcode.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/bootloader/api/btl_reset_info.h:

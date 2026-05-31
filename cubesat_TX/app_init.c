@@ -18,6 +18,7 @@
 #include "em_i2c.h"
 #include "em_cmu.h"
 #include "em_gpio.h"
+#include "em_wdog.h"
 #include <string.h>
 
 // -----------------------------------------------------------------------------
@@ -40,15 +41,13 @@
 #define OBC_I2C_SLAVE_ADDR        0x71   // 7비트 (AP_OBC 호스트 EFR32_ADDR=0x71과 일치)
 #define OBC_RX_CHUNK_SIZE         128    // FW 패킷 124B(=1+2+1+120) 수용
 
-#define GBL_TAG_END               0xFC0404FC
-
 // -----------------------------------------------------------------------------
 //                          Static Function Declarations
 // -----------------------------------------------------------------------------
 static void     obc_i2c_slave_init(void);
 static void     bootloader_storage_init(void);
-static uint32_t detect_gbl_size(BootloaderStorageSlot_t *slot);
 static void     form_network(void);
+static void     tx_watchdog_setup(void);
 
 // -----------------------------------------------------------------------------
 //                                Global Variables
@@ -78,6 +77,11 @@ void emberAfInitCallback(void)
 
   psa_crypto_init();
   app_log_info("\n=== Master (Sink / OTA Server) — Automated OTA ===\n");
+
+  // ─── 워치독 최우선 무장 ──────────────────────────────────────────────────
+  //   TX는 코디네이터라 hang 시 전 RX가 고아가 됨 → 워치독으로 자동 복구.
+  //   tick에서 tx_watchdog_feed() 호출. ~128초 내 tick 정지 시 리셋.
+  tx_watchdog_setup();
 
   // ─── Security Key 설정 ───────────────────────────────────────────────────
   security_key_id = PSA_AES_KEY_ID;
@@ -160,7 +164,7 @@ void emberAfInitCallback(void)
   obc_i2c_slave_init();
 
   app_log_info("Master init complete.\n");
-  app_log_info("Use CLI: slave_list / ota_target <1-4> / BTN0 to start OTA.\n");
+  app_log_info("OTA via AP_OBC I2C: erase(0x03) → stream(0x02) → START(0x04,target).\n");
 
 #if defined(EMBER_AF_PLUGIN_BLE)
   bleConnectionInfoTableInit();
@@ -189,44 +193,6 @@ static void form_network(void)
   }
 }
 
-static uint32_t detect_gbl_size(BootloaderStorageSlot_t *slot)
-{
-  uint32_t offset = 0;
-  uint8_t  buf[8];
-
-  while (offset + 8 <= slot->length) {
-    if (bootloader_readStorage(0, offset, buf, 8) != BOOTLOADER_OK) {
-      app_log_error("GBL scan: read failed at offset %lu\n", offset);
-      return 0;
-    }
-
-    uint32_t tag = (uint32_t)buf[0]
-                 | ((uint32_t)buf[1] << 8)
-                 | ((uint32_t)buf[2] << 16)
-                 | ((uint32_t)buf[3] << 24);
-
-    uint32_t length = (uint32_t)buf[4]
-                    | ((uint32_t)buf[5] << 8)
-                    | ((uint32_t)buf[6] << 16)
-                    | ((uint32_t)buf[7] << 24);
-
-    if (length > slot->length) {
-      app_log_error("GBL scan: invalid length %lu at offset %lu\n", length, offset);
-      return 0;
-    }
-
-    offset += 8 + length;
-
-    if (tag == GBL_TAG_END) {
-      app_log_info("GBL END tag found. Actual size: %lu bytes\n", offset);
-      return offset;
-    }
-  }
-
-  app_log_error("GBL scan: END tag not found\n");
-  return 0;
-}
-
 static void bootloader_storage_init(void)
 {
   int32_t ret = bootloader_init();
@@ -245,28 +211,11 @@ static void bootloader_storage_init(void)
   app_log_info("Storage slot 0: addr=0x%08lX, len=%lu bytes\n",
                slot_info.address, slot_info.length);
 
-  ret = bootloader_verifyImage(0, NULL);
-  if (ret == BOOTLOADER_OK) {
-    // 지상 모드: J-Link로 GBL이 적재돼 있음
-    uint32_t actual_size = detect_gbl_size(&slot_info);
-    if (actual_size == 0) {
-      app_log_error("GBL size detection FAILED. Abort ground mode.\n");
-      ota_state = OTA_IDLE;
-      return;
-    }
-    gbl_image_size = actual_size;
-    ota_image_tag  = 0xAA;
-    ota_state      = OTA_FW_READY_MANUAL;
-
-    app_log_info("=== Ground Mode ===\n");
-    app_log_info("GBL detected. size=%lu bytes\n", gbl_image_size);
-    app_log_info("Use CLI: slave_list → ota_target <1-4> → BTN0\n");
-  } else {
-    // 우주 모드: AP_OBC I2C CMD 0x01로 GBL 전달
-    app_log_info("=== Space Mode ===\n");
-    app_log_info("No valid GBL in slot. Waiting for AP_OBC I2C commands.\n");
-    ota_state = OTA_IDLE;
-  }
+  // 커스텀 보드(버튼 없음): 지상 모드 제거. SLOT0에 잔여 이미지가 있어도
+  //   무시하고 항상 IDLE로 시작 → AP_OBC가 erase(0x03)→stream(0x02)→START(0x04)로
+  //   전 과정 제어. (지상모드 무한 진입/START 거부 버그 방지)
+  ota_state = OTA_IDLE;
+  app_log_info("OTA ready. Waiting for AP_OBC I2C commands (erase→stream→start).\n");
 }
 
 /**************************************************************************//**
@@ -368,4 +317,37 @@ void I2C0_IRQHandler(void)
 
   // 처리하지 않은 잔여 플래그 정리
   I2C_IntClear(OBC_I2C_PERIPHERAL, flags & ~(I2C_IFC_ADDR | I2C_IFC_SSTOP));
+}
+
+/**************************************************************************//**
+ * 워치독 설정 — ULFRCO(~1kHz), ~128초 타임아웃 (RX fw_guard와 동일 정책).
+ *
+ * [보수적 선택] 타임아웃 128초로 길게: 정상 동작 중 긴 블로킹
+ *   (슬롯 erase ~수초, 네트워크 form/rejoin)에 의한 오발동 방지.
+ *   진짜 hang(tick 정지)만 ~128초 후 리셋 → 코디네이터 자동 재기동.
+ *
+ * ★ 발사 전 지상 보드에서 반드시 검증:
+ *    (1) 의도적 무한루프 → ~128초 후 리셋되는지
+ *    (2) 정상 OTA(erase 포함) 중 리셋되지 "않는지"
+ *****************************************************************************/
+static void tx_watchdog_setup(void)
+{
+#if defined(_SILICON_LABS_32B_SERIES_1)
+  WDOG_Init_TypeDef init = WDOG_INIT_DEFAULT;
+  init.enable  = true;
+  init.em2Run  = true;                 // EM2에서도 동작
+  init.em3Run  = true;
+  init.clkSel  = wdogClkSelULFRCO;     // 항상 가용한 1kHz 내부 클록
+  init.perSel  = wdogPeriod_128k;      // ~128s (131073 / 1024Hz)
+  WDOGn_Init(WDOG0, &init);
+  WDOGn_Feed(WDOG0);
+  app_log_info("Watchdog armed (~128s).\n");
+#endif
+}
+
+void tx_watchdog_feed(void)
+{
+#if defined(_SILICON_LABS_32B_SERIES_1)
+  WDOGn_Feed(WDOG0);
+#endif
 }

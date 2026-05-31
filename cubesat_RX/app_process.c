@@ -372,7 +372,13 @@ static void send_id_announce(void)
     app_log_error("ID_ANNOUNCE skipped: device_id not provisioned.\n");
     return;
   }
-  uint8_t msg[2] = { MSG_TYPE_ID_ANNOUNCE, my_device_id };
+  // [EUI64] device_id 뒤에 자기 EUI-64(8B, LSB first)를 실어 보냄.
+  //   유선 접근 불가 시 TX 로그로 EUI-64를 확보 → g_eui64_map[] 채우기용.
+  uint8_t *eui64 = emberGetEui64();
+  uint8_t msg[10];
+  msg[0] = MSG_TYPE_ID_ANNOUNCE;
+  msg[1] = my_device_id;
+  memcpy(&msg[2], eui64, 8);
   EmberStatus status = emberMessageSend(EMBER_COORDINATOR_ADDRESS,
                                         CUSTOM_ENDPOINT, 0,
                                         sizeof(msg), msg, tx_options);

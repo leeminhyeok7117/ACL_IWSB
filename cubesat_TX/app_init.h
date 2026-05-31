@@ -49,4 +49,8 @@
 // -----------------------------------------------------------------------------
 bool set_security_key(uint8_t* key, size_t key_length);
 
+/// TX 워치독 급이기 — 메인 루프(emberAfTickCallback)에서 매 tick 호출.
+/// tick이 멈추면(hang) ~128초 후 리셋 → 코디네이터 자동 복구.
+void tx_watchdog_feed(void);
+
 #endif  // APP_INIT_H

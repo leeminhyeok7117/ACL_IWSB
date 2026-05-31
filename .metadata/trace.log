@@ -166,3 +166,15 @@
 # The following option strings are specified for this debug session:
 # 	null
 | Worker-4: Setup scanner extension configuration | 2026-05-29 10:36:04.997 | com.iar.ide.common | /debug | com.iar.ide.common.logging.Logger | traceFile | 197 | SDK location does not exist: null |
+# !SESSION 2026-05-30 20:11:20.183
+# version: 1.1
+# verbose: true
+# The following option strings are specified for this debug session:
+# 	null
+| Worker-8: Setup scanner extension configuration | 2026-05-30 20:11:20.183 | com.iar.ide.common | /debug | com.iar.ide.common.logging.Logger | traceFile | 197 | SDK location does not exist: null |
+# !SESSION 2026-06-01 01:47:08.100
+# version: 1.1
+# verbose: true
+# The following option strings are specified for this debug session:
+# 	null
+| Worker-1: Setup scanner extension configuration | 2026-06-01 01:47:08.100 | com.iar.ide.common | /debug | com.iar.ide.common.logging.Logger | traceFile | 197 | SDK location does not exist: null |
