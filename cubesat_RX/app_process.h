@@ -34,7 +34,7 @@
 //   이후 OTA : 0xFF 단일 GBL 빌드 → 4개 보드 모두 동일 GBL로 업데이트.
 //   ※ 모든 보드가 첫 OTA(1~4)를 마친 뒤 0xFF로 바꾸면 끝. 추가 주의사항 없음.
 // ─────────────────────────────────────────────────────────────────────────────
-#define MY_DEVICE_ID_FALLBACK  0xFF   // ← 첫 OTA 시 1·2·3·4 로 변경 후 보드별 빌드
+#define MY_DEVICE_ID_FALLBACK  1   // ← 첫 OTA 시 1·2·3·4 로 변경 후 보드별 빌드
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  EUI-64 → device_id 매핑 테이블  (2순위 폴백, MY_DEVICE_ID_FALLBACK 보다 우선)
@@ -72,6 +72,12 @@ static const uint8_t g_eui64_map_count =
 //  ID_ANNOUNCE 타이밍
 // ─────────────────────────────────────────────────────────────────────────────
 #define ID_ANNOUNCE_DELAY_MS        1000U
-#define ID_ANNOUNCE_RETRY_MS        30000U
+#define ID_ANNOUNCE_RETRY_MS        10000U   // 10s: TX 미부팅 시 빠른 실패 감지
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  app_init.c에서 호출하는 공개 함수
+// ─────────────────────────────────────────────────────────────────────────────
+/// resume 경로(SUCCESS)에서 tick이 돌도록 EM2 sleep 차단 + wakeup timer 시작.
+void join_sleep_block_enable(void);
 
 #endif // APP_PROCESS_H

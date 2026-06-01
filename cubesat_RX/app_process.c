@@ -29,16 +29,51 @@
 #include "btl_interface_storage.h"
 #include "ota-unicast-bootloader-client.h"
 #include "fw_guard.h"
+#include "em_usart.h"
+#include "sl_power_manager.h"
+
+// [디버깅] VCOM(USART0) TX가 다 빠질 때까지 대기 → 로그 즉시 표시(sleep로 갇힘 방지)
+static inline void log_flush(void) { while (!(USART0->STATUS & USART_STATUS_TXC)) {} }
+
+// ─── [sleep 제어] 미가입 동안 EM2 sleep 차단 ────────────────────────────────
+//   EM1 requirement만으로는 Connect 스택이 EM2로 빠지는 경우가 있어 tick이
+//   멈춘다. 추가로 1초 주기 sleeptimer를 돌려 RTCC 인터럽트로 CPU를 깨운다.
+//   RTCC는 EM2에서도 동작하므로, 가입 전까지 최악의 경우에도 1초마다 tick이
+//   돌아 rejoin 재시도 타이머가 진행된다.
+static bool s_no_sleep_req = false;
+static sl_sleeptimer_timer_handle_t s_wakeup_timer;
+
+static void wakeup_timer_cb(sl_sleeptimer_timer_handle_t *h, void *d)
+{
+  (void)h; (void)d;   // 빈 콜백 — RTCC 인터럽트로 CPU를 EM2에서 깨우는 것이 목적
+}
+
+static inline void block_sleep_while_unjoined(bool block)
+{
+  if (block && !s_no_sleep_req) {
+    sl_power_manager_add_em_requirement(SL_POWER_MANAGER_EM1);
+    s_no_sleep_req = true;
+    // EM1 req 가 무시되는 경우를 대비해 1초 주기 RTCC 타이머로 CPU 강제 웨이크업.
+    sl_sleeptimer_start_periodic_timer_ms(&s_wakeup_timer, 1000,
+                                          wakeup_timer_cb, NULL, 0, 0);
+  } else if (!block && s_no_sleep_req) {
+    sl_power_manager_remove_em_requirement(SL_POWER_MANAGER_EM1);
+    s_no_sleep_req = false;
+    sl_sleeptimer_stop_timer(&s_wakeup_timer);   // 가입 완료 → 저전력 복귀
+  }
+}
 
 // -----------------------------------------------------------------------------
 //                              Macros and Typedefs
 // -----------------------------------------------------------------------------
 #define CUSTOM_ENDPOINT             0x02
 
-#define JOIN_RETRY_MIN_MS           5000U
-#define JOIN_RETRY_MAX_MS           60000U
+#define JOIN_RETRY_MIN_MS           2000U   // 첫 재시도 간격(빠른 재연결 우선)
+#define JOIN_RETRY_MAX_MS           20000U  // 백오프 상한(위성: 전력보다 연결성 우선)
+#define FIRST_JOIN_DELAY_MS         300U    // 부팅 후 첫 join까지 지연(PHY 보정 완료 대기)
 #define RESUME_WATCHDOG_MS          15000U
-#define MAX_CONSEC_SEND_FAILS       10U
+#define MAX_CONSEC_SEND_FAILS       3U    // 3회 연속 실패 → soft rejoin
+#define JOIN_GIVEUP_RESET_MS        300000U // 5분 연속 미가입 → 칩 리셋(깨끗한 재시작)
 
 // ─── [롤백 가드] 헬스 확인 타이밍 ────────────────────────────────────────────
 #define HEALTH_STABILITY_MS         15000U   // NETWORK_UP 연속 유지 시 healthy 확정
@@ -84,12 +119,19 @@ static EmberNodeId master_node_id     = 0x0000;
 static uint32_t    join_retry_anchor  = 0;
 static uint32_t    rejoin_backoff_ms  = JOIN_RETRY_MIN_MS;
 static uint8_t     consec_send_fails  = 0;
+static uint32_t    unjoined_since_tick = 0;   // 미가입 시작 시점(0=가입됨). giveup-reset 판정용
 
 // ─── [롤백 가드] 헬스 확인 상태 ──────────────────────────────────────────────
 static bool        health_confirmed   = false;
 static bool        boot_tick_set       = false;
 static uint32_t    boot_tick           = 0;   // 부팅 기준 tick
 static uint32_t    net_up_tick         = 0;   // 마지막 NETWORK_UP tick (0=다운)
+
+// ─── [자가복구] 잘못된 코디네이터 상태 leave defer ──────────────────────────
+// NETWORK_UP 콜백(emberNetworkInit 재진입 컨텍스트)에서 직접 emberResetNetworkState()
+// 하면 스택 상태가 꼬이고, 이어지는 resume 로직이 복구를 덮어쓴다.
+// 플래그만 세우고 emberAfTickCallback에서 안전하게 처리.
+static volatile bool stale_coord_recover_pending = false;
 
 // ─── [H-1] 슬롯 erase defer ────────────────────────────────────────────────
 // OTA PREPARE 메시지 콜백에서 직접 erase 하면 수백ms 블로킹 발생.
@@ -144,6 +186,7 @@ void emberAfMessageSentCallback(EmberStatus status, EmberOutgoingMessage *messag
     app_log_error("Parent unreachable. Soft rejoin.\n");
     consec_send_fails = 0;
     network_joined    = false;
+    rejoin_backoff_ms = JOIN_RETRY_MIN_MS;   // backoff 초기화: TX 재부팅 후 빠른 재연결
     schedule_rejoin();
   }
 }
@@ -154,10 +197,30 @@ void emberAfStackStatusCallback(EmberStatus status)
     case EMBER_NETWORK_UP:
       app_log_info("Network UP. NodeID=0x%04X, device_id=%d\n",
                    emberGetNodeId(), my_device_id);
+
+      // ─── [자가복구] 잘못된 코디네이터 상태 감지 ──────────────────────────
+      //   RX는 End Device라 NodeID는 0x0001~ 여야 정상. NodeID==0x0000(코디네이터)
+      //   이면 과거 TX 펌웨어가 form한 네트워크 상태가 NVM3에 남아 resume된 것.
+      //   UART 접근 불가한 위성에서 leave 명령을 줄 수 없으므로 자력으로 비우고
+      //   rejoin 한다. (이 경로가 없으면 영구 deadlock = brick)
+      //   ★ 실제 leave 는 콜백(emberNetworkInit 재진입) 밖 tick에서 처리 — 여기서
+      //      직접 emberResetNetworkState() 하면 스택 꼬임 + resume 로직이 덮어씀.
+      if (emberGetNodeId() == EMBER_COORDINATOR_ADDRESS) {
+        app_log_error("[RECOVER] Stale coordinator state (NodeID=0x0000). "
+                      "Will reset network in tick.\n");
+        network_joined   = false;
+        join_in_progress = false;
+        net_up_tick      = 0;
+        sl_sleeptimer_stop_timer(&id_announce_timer);
+        stale_coord_recover_pending = true;   // tick에서 leave+rejoin
+        break;
+      }
+
       network_joined    = true;
       join_in_progress  = false;
       rejoin_backoff_ms = JOIN_RETRY_MIN_MS;
       consec_send_fails = 0;
+      block_sleep_while_unjoined(false);   // 가입됨 → sleep 허용(저전력 복귀)
       net_up_tick       = sl_sleeptimer_get_tick_count();  // healthy 안정성 측정 시작
       // ─── [H-2] ID_ANNOUNCE: 1초 후 최초 전송, 이후 30초마다 재전송 ─────
       // TX가 리셋된 후에도 slave 등록이 자동 복구됨.
@@ -165,13 +228,16 @@ void emberAfStackStatusCallback(EmberStatus status)
       sl_sleeptimer_start_timer_ms(&id_announce_timer,
                                    ID_ANNOUNCE_DELAY_MS,
                                    id_announce_timer_cb, NULL, 0, 0);
+      log_flush();   // [디버깅] join 로그 즉시 표시
       break;
 
     case EMBER_NETWORK_DOWN:
       app_log_info("Network DOWN.\n");
-      network_joined   = false;
-      join_in_progress = false;
-      net_up_tick      = 0;   // 안정성 측정 리셋
+      network_joined    = false;
+      join_in_progress  = false;
+      net_up_tick       = 0;
+      rejoin_backoff_ms = JOIN_RETRY_MIN_MS;   // backoff 초기화: TX 재부팅 후 빠른 재연결
+      block_sleep_while_unjoined(true);
       sl_sleeptimer_stop_timer(&id_announce_timer);
       schedule_rejoin();
       break;
@@ -189,6 +255,18 @@ void emberAfStackStatusCallback(EmberStatus status)
 void emberAfTickCallback(void)
 {
   fw_guard_feed_watchdog();   // [롤백 가드] tick 살아있음을 워치독에 보고
+
+  // ─── [자가복구] 잘못된 코디네이터 상태 → 네트워크 비우고 재부팅 ───────────
+  //   NETWORK_UP에서 NodeID==0x0000 감지 시: 수동 "leave→reset"과 동일하게
+  //   네트워크 상태만 NVM3에서 비운 뒤 곧바로 재부팅한다.
+  //   (reset 직후 곧장 join 하면 스택 미준비로 0x8E 실패 → 재부팅이 가장 확실)
+  //   다음 부팅에서 emberNetworkInit이 NOT_JOINED 반환 → 깨끗하게 신규 join.
+  if (stale_coord_recover_pending) {
+    stale_coord_recover_pending = false;
+    app_log_error("[RECOVER] Clearing stale network state and rebooting...\n");
+    emberResetNetworkState();   // NVM3 네트워크 상태 소거(동기)
+    NVIC_SystemReset();         // 복귀 안 함 → 다음 부팅에서 신규 join
+  }
 
   // ─── [롤백 가드] 헬스 확인 / 부팅 타임아웃 self-reset ─────────────────────
   if (!boot_tick_set) {
@@ -212,13 +290,36 @@ void emberAfTickCallback(void)
 
   // ─── join/resume 워치독 ──────────────────────────────────────────────────
   if (!network_joined) {
-    uint32_t elapsed = sl_sleeptimer_tick_to_ms(
-                         sl_sleeptimer_get_tick_count() - join_retry_anchor);
+    block_sleep_while_unjoined(true);   // 미가입 동안 sleep 차단 → rejoin tick 보장
+
+    uint32_t now_tick = sl_sleeptimer_get_tick_count();
+
+    // ─── [복구] 너무 오래 미가입 → 칩 리셋(깨끗한 재시작) ──────────────────
+    //   join이 어떤 이유로든(스택 wedge, TX 부재 등) 장시간 안 되면 전체 리셋이
+    //   가장 확실한 복구. tick은 살아있어 hang-워치독은 안 걸리므로 이 경로가 필요.
+    //   정상 운용(pending_commit=0)에서는 리셋해도 롤백 카운터 증가 없음(안전).
+    if (unjoined_since_tick == 0) {
+      unjoined_since_tick = now_tick;
+    } else if (sl_sleeptimer_tick_to_ms(now_tick - unjoined_since_tick)
+                 > JOIN_GIVEUP_RESET_MS) {
+      app_log_error("[RECOVER] Unjoined > %lums. Self-reset for clean restart.\n",
+                    (unsigned long)JOIN_GIVEUP_RESET_MS);
+      log_flush();
+      NVIC_SystemReset();
+    }
+
+    uint32_t elapsed = sl_sleeptimer_tick_to_ms(now_tick - join_retry_anchor);
 
     if (join_in_progress) {
       if (elapsed > RESUME_WATCHDOG_MS) {
-        app_log_error("Join/resume stalled (%lums). Retry.\n", elapsed);
+        app_log_error("Join/resume stalled (%lums). Reset+retry.\n", elapsed);
         join_in_progress = false;
+        // JOINING 상태에 갇혔을 수 있으므로 강제로 NO_NETWORK로 되돌린 뒤 재시도.
+        // (tick 컨텍스트라 reset 후 다음 tick에서 PHY 보정 끝나고 do_join 정상 시작)
+        if (emberNetworkState() != EMBER_NO_NETWORK) {
+          emberResetNetworkState();
+        }
+        rejoin_backoff_ms = JOIN_RETRY_MIN_MS;
         schedule_rejoin();
       }
       return;
@@ -232,6 +333,9 @@ void emberAfTickCallback(void)
     }
     return;
   }
+
+  // 가입 상태 → 미가입 타이머 리셋
+  unjoined_since_tick = 0;
 
   // ─── [H-1] OTA 슬롯 erase defer ─────────────────────────────────────────
   // 메시지 콜백에서 직접 erase 하면 수백ms 블로킹 → 여기서 처리
@@ -408,11 +512,18 @@ static void id_announce_timer_cb(sl_sleeptimer_timer_handle_t *handle, void *dat
 
 static void do_join(void)
 {
+  // 안전 가드: 이미 join 시도/완료 중이면 중복 호출 방지(스택 상태 꼬임 차단).
+  EmberNetworkStatus ns = emberNetworkState();
+  if (ns != EMBER_NO_NETWORK) {
+    // 직전 reset이 아직 안 끝났거나 이미 가입됨 → 이번 틱은 건너뛰고 다음에 재시도.
+    return;
+  }
+
   EmberNetworkParameters params;
   memset(&params, 0, sizeof(params));
-  params.radioChannel = (uint8_t)emberGetDefaultChannel();
+  params.radioChannel = 0;        // ★ 구펌웨어 SLAVE_NETWORK_CHANNEL=0, TX form 채널과 동일
   params.radioTxPower = 0;
-  params.panId        = 0xFFFF;
+  params.panId        = 0xFFFF;   // ★ 위성 RX 구펌웨어와 동일 PAN (변경 금지)
 
   join_retry_anchor = sl_sleeptimer_get_tick_count();
 
@@ -422,14 +533,34 @@ static void do_join(void)
     app_log_info("Join initiated on ch=%d.\n", params.radioChannel);
   } else {
     join_in_progress = false;
-    app_log_error("emberJoinNetwork FAILED: 0x%02X\n", status);
+    // 0x8E(PHY_CALIBRATING) 등 일시 실패 → tick이 backoff 후 자동 재시도.
+    app_log_error("emberJoinNetwork FAILED: 0x%02X (tick will retry)\n", status);
   }
+}
+
+void join_sleep_block_enable(void)
+{
+  block_sleep_while_unjoined(true);
 }
 
 void start_initial_join(void)
 {
-  rejoin_backoff_ms = JOIN_RETRY_MIN_MS;
-  do_join();
+  // ★★ init 컨텍스트에서 직접 do_join()을 호출하지 않는다.
+  //   emberAfInitCallback()은 첫 emberTick() 이전이라 라디오 PHY 보정이
+  //   끝나지 않았다. 이 시점에 emberJoinNetwork()를 부르면 항상
+  //   EMBER_PHY_CALIBRATING(0x8E)로 실패한다(과거 로그의 0x8E 원인).
+  //   → 첫 join을 tick의 rejoin 로직에 위임한다. tick은 sl_system_process_action
+  //      → emberTick()(PHY 보정 완료) 이후 실행되므로 join이 정상 시작된다.
+  //
+  // ★★ EM2 sleep 차단(첫 sleep 이전에 선제 차단).
+  //   미가입 End Device가 EM2로 자면 라디오가 꺼져 join 응답을 못 받는다.
+  //   tick에서 막으면 이미 늦다(tick 자체가 sleep으로 안 돎) → 여기서 선제 차단.
+  block_sleep_while_unjoined(true);
+  rejoin_backoff_ms   = JOIN_RETRY_MIN_MS;
+  unjoined_since_tick = 0;   // tick 첫 진입에서 현재 시각으로 설정됨
+  // 첫 join을 ~FIRST_JOIN_DELAY_MS 후 tick에서 시도하도록 anchor를 과거로 당김.
+  join_retry_anchor = sl_sleeptimer_get_tick_count()
+        - sl_sleeptimer_ms_to_tick(JOIN_RETRY_MIN_MS - FIRST_JOIN_DELAY_MS);
 }
 
 static void schedule_rejoin(void)

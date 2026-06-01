@@ -176,7 +176,7 @@ app_process.o: ../app_process.c \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/driver/leddrv/inc/sl_simple_led.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/driver/leddrv/inc/sl_led.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_gpio.h \
- ../app_process.h \
+ ../app_process.h ../app_init.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/bootloader/api/btl_interface.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/bootloader/api/btl_errorcode.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/bootloader/api/btl_reset_info.h \
@@ -190,7 +190,9 @@ app_process.o: ../app_process.c \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emdrv/nvm3/inc/nvm3_default.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emdrv/nvm3/inc/nvm3_generic.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emdrv/nvm3/inc/nvm3_hal.h \
- /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emdrv/nvm3/inc/nvm3_default.h
+ /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emdrv/nvm3/inc/nvm3_default.h \
+ ../fw_guard.h \
+ /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_usart.h
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/toolchain/inc/sl_gcc_preinclude.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/legacy_hal/inc/platform-header.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_core.h:
@@ -369,6 +371,7 @@ app_process.o: ../app_process.c \
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/driver/leddrv/inc/sl_led.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_gpio.h:
 ../app_process.h:
+../app_init.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/bootloader/api/btl_interface.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/bootloader/api/btl_errorcode.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/bootloader/api/btl_reset_info.h:
@@ -383,3 +386,5 @@ app_process.o: ../app_process.c \
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emdrv/nvm3/inc/nvm3_generic.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emdrv/nvm3/inc/nvm3_hal.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emdrv/nvm3/inc/nvm3_default.h:
+../fw_guard.h:
+/home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_usart.h:

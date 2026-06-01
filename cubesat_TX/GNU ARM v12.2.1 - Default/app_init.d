@@ -181,6 +181,7 @@ app_init.o: ../app_init.c \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/bootloader/api/btl_interface_parser.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/bootloader/api/btl_interface_storage.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/bootloader/api/btl_interface_storage.h \
+ ../fw_guard.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_i2c.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_cmu.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_cmu_compat.h \
@@ -370,6 +371,7 @@ app_init.o: ../app_init.c \
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/bootloader/api/btl_interface_parser.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/bootloader/api/btl_interface_storage.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/bootloader/api/btl_interface_storage.h:
+../fw_guard.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_i2c.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_cmu.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_cmu_compat.h:

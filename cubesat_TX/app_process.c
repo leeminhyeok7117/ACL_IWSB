@@ -32,6 +32,11 @@
 #include "btl_interface_storage.h"
 #include "ota-unicast-bootloader-server.h"
 #include "nvm3_default.h"
+#include "fw_guard.h"
+#include "em_usart.h"
+
+// [디버깅] VCOM(USART0) TX가 다 빠질 때까지 대기 → 로그 즉시 표시(sleep로 갇힘 방지)
+static inline void log_flush(void) { while (!(USART0->STATUS & USART_STATUS_TXC)) {} }
 
 // -----------------------------------------------------------------------------
 //                              Macros and Typedefs
@@ -65,6 +70,12 @@
 
 #define POLL_RESPONSE_TIMEOUT_MS  1500U
 #define POLL_CYCLE_INTERVAL_MS    5000U
+
+// ─── [롤백 가드] 헬스 확인 타이밍 ────────────────────────────────────────────
+//   TX는 코디네이터라 스택 up이 RX 존재와 무관(form은 혼자 성립) → 스푸리어스
+//   롤백 위험 없음. 스택이 안정적으로 up 유지되면 healthy로 간주.
+#define HEALTH_STABILITY_MS       15000U   // 스택 up 연속 유지 시 healthy 확정
+#define BOOT_HEALTH_TIMEOUT_MS    180000U  // 이 시간 내 healthy 못 되면 probation시 self-reset
 
 // OBC I2C 버퍼 크기 (app_init.c 와 동일해야 함)
 #define OBC_LOCAL_BUF_SIZE  (128 + 8)
@@ -117,6 +128,12 @@ static bool     slave_prepare_acked = false;
 
 static sl_sleeptimer_timer_handle_t bootload_req_timer;
 static bool bootload_req_pending = false;
+
+// ─── [롤백 가드] 헬스 확인 상태 ──────────────────────────────────────────────
+static bool     health_confirmed = false;
+static bool     boot_tick_set    = false;
+static uint32_t boot_tick        = 0;   // 부팅 기준 tick
+static uint32_t stack_up_tick    = 0;   // 스택 up 시작 tick (0=down)
 
 
 // ─── Slave 테이블 ─────────────────────────────────────────────────────────────
@@ -186,6 +203,7 @@ void emberAfIncomingMessageCallback(EmberIncomingMessage *message)
       }
       app_log_info("}\n");
     }
+    log_flush();   // [디버깅] slave 등록/EUI64 로그 즉시 표시
     return;
   }
 
@@ -298,7 +316,7 @@ void emberAfChildJoinCallback(EmberNodeType nodeType, EmberNodeId nodeId)
  *****************************************************************************/
 void emberAfTickCallback(void)
 {
-  tx_watchdog_feed();   // 워치독 급이기 (tick 살아있음 보고)
+  fw_guard_feed_watchdog();   // 워치독 급이기 (tick 살아있음 보고, ~128s hang 시 리셋)
 
   // ─── [C-2] 첫 tick에서 NVM3 slave_table 로드 ─────────────────────────────
   if (!slave_table_loaded) {
@@ -306,10 +324,54 @@ void emberAfTickCallback(void)
     load_slave_table_nvm3();
   }
 
+  // ─── [롤백 가드] 헬스 확인 / 부팅 타임아웃 self-reset ─────────────────────
+  //   TX 자체 OTA 직후(probation) 새 펌웨어가 스택 up을 15초 유지하면 healthy
+  //   확정 → golden 캡처(이 시점 SLOT0=방금 설치한 TX 이미지). 코디네이터라
+  //   스택 up은 RX 존재와 무관하므로 스푸리어스 롤백 없음.
+  if (!boot_tick_set) {
+    boot_tick     = sl_sleeptimer_get_tick_count();
+    boot_tick_set = true;
+  }
+  if (!health_confirmed) {
+    uint32_t now = sl_sleeptimer_get_tick_count();
+    if (emberStackIsUp()) {
+      if (stack_up_tick == 0) stack_up_tick = now;
+      if (sl_sleeptimer_tick_to_ms(now - stack_up_tick) >= HEALTH_STABILITY_MS) {
+        fw_guard_confirm_healthy();   // pending일 때만 golden 캡처
+        health_confirmed = true;
+      }
+    } else {
+      stack_up_tick = 0;   // 안정성 측정 리셋
+      if (fw_guard_is_on_probation()
+          && sl_sleeptimer_tick_to_ms(now - boot_tick) >= BOOT_HEALTH_TIMEOUT_MS) {
+        app_log_error("[GUARD] Boot health timeout — self-reset (probation count).\n");
+        log_flush();
+        NVIC_SystemReset();
+      }
+    }
+  }
+
   if (emberStackIsUp()) {
     sl_led_turn_on(&sl_led_led0);
   } else {
     sl_led_turn_off(&sl_led_led0);
+  }
+
+  // ─── permit-join 주기적 재확인 (resume 타이밍 갭 보험) ────────────────────
+  //   permit-join은 NVM3에 저장되지 않아 resume 시 닫힘(0)으로 시작한다.
+  //   NETWORK_UP 콜백에서 열지만, 만일의 누락/경합에 대비해 주기적으로 재확인.
+  //   idempotent(이미 열려 있으면 무해)하므로 안전. RX가 항상 join 가능하게 보장.
+  {
+    static uint32_t s_last_permit_tick = 0;
+    static bool     s_permit_init      = false;
+    uint32_t now = sl_sleeptimer_get_tick_count();
+    if (emberStackIsUp()
+        && (!s_permit_init
+            || sl_sleeptimer_tick_to_ms(now - s_last_permit_tick) > 30000U)) {
+      emberPermitJoining(0xFF);
+      s_last_permit_tick = now;
+      s_permit_init      = true;
+    }
   }
 
   // ─── [M-3] volatile 버퍼 → 로컬 복사 후 OBC 명령 처리 ──────────────────
@@ -710,7 +772,12 @@ static void handle_cmd_start(const uint8_t *buf, uint16_t len)
       ota_state = OTA_FW_READY;
       return;
     }
+    // [롤백 가드] 설치 직전 probation 무장 → 새 TX 펌웨어가 다음 부팅에서 검증받음.
+    //   (verifyImage 통과 = verify-before-install 방어. 부팅 후 스택 up 15s 유지하면
+    //    healthy 확정 + 이 SLOT0(TX 이미지)를 golden 캡처. 미확정 5회 부팅 시 롤백.)
+    fw_guard_arm_pending();
     app_log_info("Self-update verified. Rebooting to install...\n");
+    log_flush();
     bootloader_rebootAndInstall();   // 복귀 안 함
     return;
   }

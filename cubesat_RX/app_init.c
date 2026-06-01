@@ -27,6 +27,7 @@
 #include "btl_interface_storage.h"
 #include "nvm3_default.h"
 #include "fw_guard.h"
+#include "sl_udelay.h"
 #include <string.h>
 #include <stdbool.h>
 
@@ -88,12 +89,12 @@ void emberAfInitCallback(void)
 
   // ─── Security Key 설정 ───────────────────────────────────────────────────
   security_key_id = PSA_AES_KEY_ID;
+  // 구 펌웨어 NVM3에 다른 키가 남아있을 수 있으므로 항상 삭제 후 재생성.
+  // 위성 OTA 후 첫 부팅에서 잘못된 키를 재사용하는 문제를 원천 차단.
+  psa_destroy_key(security_key_id);   // 없으면 PSA_ERROR_INVALID_HANDLE → 무시
   psa_key_attributes_t key_attr = psa_key_attributes_init();
-  psa_status_t psa_status = psa_get_key_attributes(security_key_id, &key_attr);
-  if (psa_status == PSA_ERROR_INVALID_HANDLE) {
-    app_log_info("No PSA AES key found, creating one.\n");
-    psa_reset_key_attributes(&key_attr);
-    key_attr = psa_key_attributes_init();
+  {
+    app_log_info("Importing PSA AES key (always fresh).\n");
     psa_set_key_id(&key_attr, security_key_id);
     psa_set_key_algorithm(&key_attr, PSA_ALG_ECB_NO_PADDING);
     psa_set_key_usage_flags(&key_attr, PSA_KEY_USAGE_ENCRYPT | PSA_KEY_USAGE_DECRYPT);
@@ -119,19 +120,16 @@ void emberAfInitCallback(void)
 #endif
 #endif
 
-    psa_status = psa_import_key(&key_attr,
-                                security_key.contents,
-                                (size_t)EMBER_ENCRYPTION_KEY_SIZE,
-                                &security_key_id);
+    psa_status_t psa_status = psa_import_key(&key_attr,
+                                             security_key.contents,
+                                             (size_t)EMBER_ENCRYPTION_KEY_SIZE,
+                                             &security_key_id);
     psa_reset_key_attributes(&key_attr);
     if (psa_status == PSA_SUCCESS) {
       app_log_info("Security key import OK, id: %lu\n", security_key_id);
     } else {
       app_log_error("Security key import FAIL: %ld\n", psa_status);
     }
-  } else {
-    psa_reset_key_attributes(&key_attr);   // 리소스 해제
-    app_log_info("PSA AES key exists, reusing.\n");
   }
 
   em_status = emberSetPsaSecurityKey(security_key_id);
@@ -236,25 +234,14 @@ static uint8_t load_device_id_from_nvm3(void)
  *****************************************************************************/
 static void resume_or_join_network(void)
 {
-  EmberStatus status = emberNetworkInit();
-  app_log_info("emberNetworkInit: 0x%02X (netState=0x%02X)\n",
-               status, emberNetworkState());
-
-  if (status == EMBER_NOT_JOINED) {
-    app_log_info("No saved network. One-time join...\n");
-    network_joined   = false;
-    join_in_progress = false;
-    start_initial_join();
-  } else if (status == EMBER_SUCCESS) {
-    app_log_info("Resuming saved network from NVM3...\n");
-    network_joined   = false;
-    join_in_progress = true;   // 15s 워치독 무장
-  } else {
-    app_log_error("emberNetworkInit err: 0x%02X. Fallback join.\n", status);
-    network_joined   = false;
-    join_in_progress = false;
-    start_initial_join();
-  }
+  // 구 위성 펌웨어 검증 방식: 매 부팅 NVM3 소거 → 항상 fresh join.
+  // emberNetworkInit() 미호출 → PHY 재보정(0x8E) 없음, stale 상태 처리 불필요.
+  emberResetNetworkState();        // NVM3 네트워크 상태 소거
+  sl_udelay_wait(100000);          // 100ms busy-wait: DOWN 전환 완료 대기
+  network_joined   = false;
+  join_in_progress = false;
+  app_log_info("Network cleared. Starting join...\n");
+  start_initial_join();            // sleep 차단 + tick에 첫 join 위임(직접 join 안 함)
 }
 
 static void bootloader_storage_init(void)

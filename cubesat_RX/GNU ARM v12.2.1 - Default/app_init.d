@@ -185,7 +185,8 @@ app_init.o: ../app_init.c \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emdrv/nvm3/inc/nvm3_generic.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emdrv/nvm3/inc/nvm3_hal.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emdrv/nvm3/inc/nvm3_default.h \
- ../fw_guard.h
+ ../fw_guard.h \
+ /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/udelay/inc/sl_udelay.h
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/toolchain/inc/sl_gcc_preinclude.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//app/common/util/app_log/app_log.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/iostream/inc/sl_iostream.h:
@@ -374,3 +375,4 @@ app_init.o: ../app_init.c \
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emdrv/nvm3/inc/nvm3_hal.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emdrv/nvm3/inc/nvm3_default.h:
 ../fw_guard.h:
+/home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/udelay/inc/sl_udelay.h:

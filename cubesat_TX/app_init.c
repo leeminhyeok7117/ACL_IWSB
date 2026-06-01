@@ -15,10 +15,10 @@
 #include "mbedtls/build_info.h"
 #include "btl_interface.h"
 #include "btl_interface_storage.h"
+#include "fw_guard.h"
 #include "em_i2c.h"
 #include "em_cmu.h"
 #include "em_gpio.h"
-#include "em_wdog.h"
 #include <string.h>
 
 // -----------------------------------------------------------------------------
@@ -26,7 +26,7 @@
 // -----------------------------------------------------------------------------
 #define PSA_AES_KEY_ID            1
 
-#define MASTER_NETWORK_PAN_ID     0xFFFF
+#define MASTER_NETWORK_PAN_ID     0xFFFF   // ★ 위성 RX 구펌웨어가 0xFFFF로 join → 반드시 유지
 #define MASTER_TX_POWER           0
 
 // ─── 실제 보드 배선 (검증된 동작 코드 기준) ────────────────────────────────
@@ -47,7 +47,6 @@
 static void     obc_i2c_slave_init(void);
 static void     bootloader_storage_init(void);
 static void     form_network(void);
-static void     tx_watchdog_setup(void);
 
 // -----------------------------------------------------------------------------
 //                                Global Variables
@@ -78,10 +77,18 @@ void emberAfInitCallback(void)
   psa_crypto_init();
   app_log_info("\n=== Master (Sink / OTA Server) — Automated OTA ===\n");
 
-  // ─── 워치독 최우선 무장 ──────────────────────────────────────────────────
-  //   TX는 코디네이터라 hang 시 전 RX가 고아가 됨 → 워치독으로 자동 복구.
-  //   tick에서 tx_watchdog_feed() 호출. ~128초 내 tick 정지 시 리셋.
-  tx_watchdog_setup();
+  // ─── [롤백 가드] 최우선: 부트로더 init 후 즉시 probation/롤백 판단 ─────────
+  //   TX는 코디네이터라 자체 OTA로 불량 펌웨어 설치 시 전 네트워크가 마비되고
+  //   추가 OTA 경로까지 사라진다(단일 장애점). 롤백 가드가 특히 중요.
+  //   fw_guard가 워치독(WDOG0, ~128s)도 함께 무장 → tick에서 fw_guard_feed_watchdog().
+  //   네트워크 form보다 먼저 수행 — 롤백할 거면 form은 의미 없음.
+  {
+    int32_t btl = bootloader_init();
+    if (btl != BOOTLOADER_OK) {
+      app_log_error("bootloader_init FAILED: 0x%lX (rollback guard limited)\n", btl);
+    }
+    fw_guard_init();   // 롤백 트리거 시 복귀하지 않음
+  }
 
   // ─── Security Key 설정 ───────────────────────────────────────────────────
   security_key_id = PSA_AES_KEY_ID;
@@ -142,9 +149,10 @@ void emberAfInitCallback(void)
     // 최초 부팅 or NVM3 초기화 후 → 네트워크 형성
     form_network();
   } else if (em_status == EMBER_SUCCESS) {
-    // NVM3에서 복원 중 — NETWORK_UP 콜백에서 permit-join 재적용
-    app_log_info("Resuming saved network. NodeID=0x%04X (permit-join on NETWORK_UP)\n",
-                 emberGetNodeId());
+    // NVM3에서 복원 중 — NETWORK_UP 콜백에서 emberPermitJoining(0xFF) 호출.
+    // SDK 규정: emberPermitJoining()은 NETWORK_UP 이후에만 호출 가능.
+    // RX는 5초 간격 재시도를 하므로 NETWORK_UP까지의 간격을 충분히 커버함.
+    app_log_info("Resuming saved network. NodeID=0x%04X\n", emberGetNodeId());
   } else {
     // 복원 실패 — 강제 형성 폴백
     app_log_error("emberNetworkInit err: 0x%02X. Forming new network.\n", em_status);
@@ -195,15 +203,9 @@ static void form_network(void)
 
 static void bootloader_storage_init(void)
 {
-  int32_t ret = bootloader_init();
-  if (ret != BOOTLOADER_OK) {
-    app_log_error("bootloader_init() FAILED: 0x%lX\n", ret);
-    return;
-  }
-  app_log_info("Bootloader interface initialized.\n");
-
+  // bootloader_init() 는 emberAfInitCallback 초반(롤백 가드)에서 이미 수행됨.
   BootloaderStorageSlot_t slot_info;
-  ret = bootloader_getStorageSlotInfo(0, &slot_info);
+  int32_t ret = bootloader_getStorageSlotInfo(0, &slot_info);
   if (ret != BOOTLOADER_OK) {
     app_log_error("getStorageSlotInfo FAILED: 0x%lX\n", ret);
     return;
@@ -319,35 +321,3 @@ void I2C0_IRQHandler(void)
   I2C_IntClear(OBC_I2C_PERIPHERAL, flags & ~(I2C_IFC_ADDR | I2C_IFC_SSTOP));
 }
 
-/**************************************************************************//**
- * 워치독 설정 — ULFRCO(~1kHz), ~128초 타임아웃 (RX fw_guard와 동일 정책).
- *
- * [보수적 선택] 타임아웃 128초로 길게: 정상 동작 중 긴 블로킹
- *   (슬롯 erase ~수초, 네트워크 form/rejoin)에 의한 오발동 방지.
- *   진짜 hang(tick 정지)만 ~128초 후 리셋 → 코디네이터 자동 재기동.
- *
- * ★ 발사 전 지상 보드에서 반드시 검증:
- *    (1) 의도적 무한루프 → ~128초 후 리셋되는지
- *    (2) 정상 OTA(erase 포함) 중 리셋되지 "않는지"
- *****************************************************************************/
-static void tx_watchdog_setup(void)
-{
-#if defined(_SILICON_LABS_32B_SERIES_1)
-  WDOG_Init_TypeDef init = WDOG_INIT_DEFAULT;
-  init.enable  = true;
-  init.em2Run  = true;                 // EM2에서도 동작
-  init.em3Run  = true;
-  init.clkSel  = wdogClkSelULFRCO;     // 항상 가용한 1kHz 내부 클록
-  init.perSel  = wdogPeriod_128k;      // ~128s (131073 / 1024Hz)
-  WDOGn_Init(WDOG0, &init);
-  WDOGn_Feed(WDOG0);
-  app_log_info("Watchdog armed (~128s).\n");
-#endif
-}
-
-void tx_watchdog_feed(void)
-{
-#if defined(_SILICON_LABS_32B_SERIES_1)
-  WDOGn_Feed(WDOG0);
-#endif
-}
