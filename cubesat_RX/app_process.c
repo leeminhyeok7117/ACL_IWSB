@@ -514,8 +514,23 @@ static void do_join(void)
 {
   // 안전 가드: 이미 join 시도/완료 중이면 중복 호출 방지(스택 상태 꼬임 차단).
   EmberNetworkStatus ns = emberNetworkState();
+
+  // ─── [버그픽스] stale JOINED 복구 ────────────────────────────────────────
+  //   소프트 리조인(부모 unreachable 3회)은 network_joined=false 만 내리고
+  //   스택은 죽은 옛 부모에 EMBER_JOINED_NETWORK 로 그대로 묶여 있다.
+  //   이 상태면 아래 NO_NETWORK 게이트에 매번 막혀 emberJoinNetwork()를 영영
+  //   호출 못 하고(=재가입 불가), join_retry_anchor도 안 움직여 tick마다
+  //   "Rejoin..." 로그만 폭주한다. → 강제로 네트워크를 내려 NO_NETWORK 로 만든다.
+  //   (do_join 은 tick 컨텍스트에서만 호출되므로 emberResetNetworkState() 안전)
+  if (ns == EMBER_JOINED_NETWORK) {
+    app_log_info("Stale JOINED while unjoined → reset network state, then rejoin.\n");
+    emberResetNetworkState();
+    rejoin_backoff_ms = JOIN_RETRY_MIN_MS;
+    join_retry_anchor = sl_sleeptimer_get_tick_count();  // 다음 틱 스핀/로그폭주 방지
+    return;   // reset 완료(~다음 틱) 후 NO_NETWORK 되면 실제 join 진행
+  }
   if (ns != EMBER_NO_NETWORK) {
-    // 직전 reset이 아직 안 끝났거나 이미 가입됨 → 이번 틱은 건너뛰고 다음에 재시도.
+    // JOINING 등 전이 상태 — 이번 틱은 건너뛰고 다음에 재시도.
     return;
   }
 

@@ -311,6 +311,19 @@ void emberAfChildJoinCallback(EmberNodeType nodeType, EmberNodeId nodeId)
                nodeId, nodeType);
 }
 
+// ─── [버그픽스] 워치독 하트비트 ──────────────────────────────────────────────
+//   증상: 등록된 RX가 오프라인일 때 TX가 그 RX를 폴링 → poll_waiting(응답 대기)
+//   상태로 진입. 이 구간엔 CPU를 깨울 타이머가 없어(poll_cycle_timer는 정지됨)
+//   EM2에서 계속 잠 → tick 멈춤 → ~128s 후 워치독이 TX를 리셋(스푸리어스).
+//   해결: 항상 도는 주기 타이머로 CPU를 깨워 tick(=fw_guard_feed_watchdog) 보장.
+//   ※ 이 콜백은 feed를 하지 않고 wake만 한다. 진짜 hang(루프에 갇힘)이면 tick에
+//      도달 못 해 feed 안 됨 → 워치독이 정상적으로 잡는다(방어 유지).
+static sl_sleeptimer_timer_handle_t s_heartbeat_timer;
+static void heartbeat_timer_cb(sl_sleeptimer_timer_handle_t *h, void *d)
+{
+  (void)h; (void)d;   // 빈 콜백 — EM2에서 CPU를 깨우는 것만이 목적
+}
+
 /**************************************************************************//**
  * Tick callback
  *****************************************************************************/
@@ -318,10 +331,13 @@ void emberAfTickCallback(void)
 {
   fw_guard_feed_watchdog();   // 워치독 급이기 (tick 살아있음 보고, ~128s hang 시 리셋)
 
-  // ─── [C-2] 첫 tick에서 NVM3 slave_table 로드 ─────────────────────────────
+  // ─── [C-2] 첫 tick에서 NVM3 slave_table 로드 + 하트비트 타이머 시작 ───────
   if (!slave_table_loaded) {
     slave_table_loaded = true;
     load_slave_table_nvm3();
+    // 2초 주기로 CPU를 깨워 어떤 폴링 상태에서도 tick이 멈추지 않게 한다.
+    sl_sleeptimer_start_periodic_timer_ms(&s_heartbeat_timer, 2000,
+                                          heartbeat_timer_cb, NULL, 0, 0);
   }
 
   // ─── [롤백 가드] 헬스 확인 / 부팅 타임아웃 self-reset ─────────────────────
