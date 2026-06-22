@@ -29,7 +29,7 @@ EFR32FG12P(Silicon Labs) 기반 큐브위성 노드의 "자동화 OTA 펌웨어 
 flowchart LR
     GS[지상국] -->|UHF / S-band| MOBC["Main_OBC<br/>BUS"]
     MOBC -->|I2C| AOBC["AP_OBC<br/>Payload"]
-    AOBC -->|I2C 스트리밍| TX["TX<br/>Master / OTA Server"]
+    AOBC -->|I2C| TX["TX<br/>Master / OTA Server"]
     subgraph SLAVES["Slave 노드 ×N"]
         direction TB
         RX1["RX #1"]
