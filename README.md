@@ -19,33 +19,29 @@ EFR32FG12P(Silicon Labs) 기반 큐브위성 노드의 "자동화 OTA 펌웨어 
 * **커스텀 엔드포인트**: `0x02`
 
 ### 통신 체인
-
 ```
 지상국 ──UHF/S-band──▶ Main_OBC(BUS) ──I2C──▶ AP_OBC(Payload) ──I2C──▶ TX(Master/Sink) ──Connect RF──▶ RX(Slave/Sensor) ×N
-                                                                  │
-                                                                  └─ 외부 SPI Flash (SLOT0 staging + golden A/B)
+                                                                              │
+                                                                              └─ 외부 SPI Flash (SLOT0 staging + golden A/B)
 ```
 
-​```mermaid
+```mermaid
 flowchart LR
-    GS[지상국] -->|UHF / S-band| MOBC[Main_OBC<br/>BUS]
-    MOBC -->|I2C| AOBC[AP_OBC<br/>Payload]
-    AOBC -->|I2C 스트리밍| TX[TX<br/>Master / OTA Server]
-
-    subgraph SLAVES [Slave 노드 &times;N]
+    GS[지상국] -->|UHF / S-band| MOBC["Main_OBC<br/>BUS"]
+    MOBC -->|I2C| AOBC["AP_OBC<br/>Payload"]
+    AOBC -->|I2C 스트리밍| TX["TX<br/>Master / OTA Server"]
+    subgraph SLAVES["Slave 노드 ×N"]
         direction TB
-        RX1[RX #1]
-        RX2[RX #2]
-        RXN["&#8942;"]
+        RX1["RX #1"]
+        RX2["RX #2"]
+        RXN["⋮"]
     end
-
     TX ==>|Connect Unicast OTA| RX1
     TX ==>|Connect Unicast OTA| RX2
     TX -.->|polling / ID announce| RX1
     TX -.->|polling / ID announce| RX2
-
-    TX -->|staging + 롤백 golden| FLASH[(External SPI Flash<br/>SLOT0 + golden A/B)]
-​```
+    TX -->|staging + 롤백 golden| FLASH[("External SPI Flash<br/>SLOT0 + golden A/B")]
+```
 
 ---
 
