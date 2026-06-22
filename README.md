@@ -11,20 +11,19 @@ EFR32FG12P(Silicon Labs) 기반 큐브위성 노드의 "자동화 OTA 펌웨어 
 
 | 노드 | 역할 | Connect 역할 | 비고 |
 |------|------|-------------|------|
-| **TX** (`cubesat_TX`) | Master / OTA **Server** | Sink · Coordinator | AP_OBC와 I2C 연결, 이미지 staging·배포 주체 |
-| **RX** (`cubesat_RX`) | Slave / OTA **Client** | Sensor · Star End Device | 센서 노드, OTA 수신·자가 설치 |
+| **TX** (`cubesat_TX`) | Master / OTA **Server** | Sink · Coordinator | AP_OBC와 I2C 연결, 이미지 staging 맟 배포 주체 |
+| **RX** (`cubesat_RX`) | Slave / OTA **Client** | Sensor · Receive Device | 센서 노드, OTA 수신, 자가 설치 |
 | **Bootloader** (`bootloader-storage-spiflash-sfdp-single`) | Gecko Bootloader | — | 외부 SPI 플래시(SFDP) 단일 슬롯 스토리지 |
 
-* **대상 보드**: BRD4253A (EFR32FG12P)
 * **무선 스택**: Silicon Labs Connect (sub-GHz, 채널 0~10 ≈ 902–922 MHz)
 * **커스텀 엔드포인트**: `0x02`
 
 ### 통신 체인
 
 ```
-지상국 ──RF──▶ AP_OBC ──I2C──▶ TX(Master/Sink) ──Connect RF──▶ RX(Slave/Sensor) ×N
-                                     │
-                                     └─ 외부 SPI Flash (SLOT0 staging + golden A/B)
+지상국 ──UHF/S-band──▶ Main_OBC(BUS) ──I2C──▶ AP_OBC(Payload) ──I2C──▶ TX(Master/Sink) ──Connect RF──▶ RX(Slave/Sensor) ×N
+                                                                  │
+                                                                  └─ 외부 SPI Flash (SLOT0 staging + golden A/B)
 ```
 
 ```mermaid
