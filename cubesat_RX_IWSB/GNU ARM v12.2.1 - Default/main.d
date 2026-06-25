@@ -1,9 +1,9 @@
 main.o: ../main.c \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/toolchain/inc/sl_gcc_preinclude.h \
- /home/lmh/SimplicityStudio/v5_workspace/cubesat_RX/autogen/sl_component_catalog.h \
+ /home/lmh/SimplicityStudio/v5_workspace/cubesat_RX_IWSB/autogen/sl_component_catalog.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/system/inc/sl_system_init.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/power_manager/inc/sl_power_manager.h \
- /home/lmh/SimplicityStudio/v5_workspace/cubesat_RX/config/sl_power_manager_config.h \
+ /home/lmh/SimplicityStudio/v5_workspace/cubesat_RX_IWSB/config/sl_power_manager_config.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_slist.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_status.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/sleeptimer/inc/sl_sleeptimer.h \
@@ -16,10 +16,10 @@ main.o: ../main.c \
  ../app_init.h ../app_process.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/system/inc/sl_system_process_action.h
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/toolchain/inc/sl_gcc_preinclude.h:
-/home/lmh/SimplicityStudio/v5_workspace/cubesat_RX/autogen/sl_component_catalog.h:
+/home/lmh/SimplicityStudio/v5_workspace/cubesat_RX_IWSB/autogen/sl_component_catalog.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/system/inc/sl_system_init.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/power_manager/inc/sl_power_manager.h:
-/home/lmh/SimplicityStudio/v5_workspace/cubesat_RX/config/sl_power_manager_config.h:
+/home/lmh/SimplicityStudio/v5_workspace/cubesat_RX_IWSB/config/sl_power_manager_config.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_slist.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_status.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/sleeptimer/inc/sl_sleeptimer.h:

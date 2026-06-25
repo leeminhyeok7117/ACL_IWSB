@@ -61,7 +61,7 @@ gecko_sdk_4.5.0/platform/radio/rail_lib/plugin/rail_util_power_manager_init/sl_r
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/Device/SiliconLabs/EFR32FG12P/Include/efr32fg12p_af_pins.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/radio/rail_lib/common/rail_assert_error_codes.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk/platform/radio/rail_lib/plugin/rail_util_power_manager_init/sl_rail_util_power_manager_init.h \
- /home/lmh/SimplicityStudio/v5_workspace/cubesat_RX/config/sl_rail_util_power_manager_init_config.h
+ /home/lmh/SimplicityStudio/v5_workspace/cubesat_RX_IWSB/config/sl_rail_util_power_manager_init_config.h
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/toolchain/inc/sl_gcc_preinclude.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/radio/rail_lib/common/rail.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/radio/rail_lib/common/rail_types.h:
@@ -123,4 +123,4 @@ gecko_sdk_4.5.0/platform/radio/rail_lib/plugin/rail_util_power_manager_init/sl_r
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/Device/SiliconLabs/EFR32FG12P/Include/efr32fg12p_af_pins.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/radio/rail_lib/common/rail_assert_error_codes.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk/platform/radio/rail_lib/plugin/rail_util_power_manager_init/sl_rail_util_power_manager_init.h:
-/home/lmh/SimplicityStudio/v5_workspace/cubesat_RX/config/sl_rail_util_power_manager_init_config.h:
+/home/lmh/SimplicityStudio/v5_workspace/cubesat_RX_IWSB/config/sl_rail_util_power_manager_init_config.h:

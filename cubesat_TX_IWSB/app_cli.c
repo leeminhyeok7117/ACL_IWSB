@@ -428,6 +428,55 @@ void cli_poll_status(sl_cli_command_arg_t *arguments)
   app_log_info("[POLL] Manual poll cycle started.\n");
 }
 
+/******************************************************************************
+ * CLI - meas command : RSSI 측정 캠페인 1회 시작(주파수 호핑 스윕)
+ *****************************************************************************/
+void cli_meas_start(sl_cli_command_arg_t *arguments)
+{
+  (void)arguments;
+  if (meas_campaign_active()) {
+    app_log_info("[MEAS] already running.\n");
+    return;
+  }
+  meas_campaign_start();
+}
+
+/******************************************************************************
+ * CLI - meas_stat command : 저장된 RSSI 레코드 수 출력
+ *****************************************************************************/
+void cli_meas_stat(sl_cli_command_arg_t *arguments)
+{
+  (void)arguments;
+  app_log_info("[MEAS] ready=%d active=%d records=%lu\n",
+               (int)rssi_log_ready(), (int)meas_campaign_active(),
+               (unsigned long)rssi_log_count());
+}
+
+/******************************************************************************
+ * CLI - meas_clear command : RSSI 로그 비움(커서 리셋)
+ *****************************************************************************/
+void cli_meas_clear(sl_cli_command_arg_t *arguments)
+{
+  (void)arguments;
+  rssi_log_clear();
+  app_log_info("[MEAS] log cleared.\n");
+}
+
+/******************************************************************************
+ * CLI - meas_auto command : 자동 주기 스윕 on/off
+ *   사용법: meas_auto <0|1>   (인자 없으면 현재 상태만 출력)
+ *****************************************************************************/
+void cli_meas_auto(sl_cli_command_arg_t *arguments)
+{
+  uint8_t cnt = sl_cli_get_argument_count(arguments);
+  if (cnt >= 1) {
+    uint8_t en = sl_cli_get_argument_uint8(arguments, 0);
+    meas_auto_set(en != 0);
+  }
+  app_log_info("[MEAS] auto = %d (gap=%us)\n",
+               (int)meas_auto_get(), (unsigned)MEAS_AUTO_GAP_S);
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 //  Security key 유틸리티 (기존 그대로)
 // ─────────────────────────────────────────────────────────────────────────────

@@ -63,8 +63,8 @@ gecko_sdk_4.5.0/platform/emlib/src/em_usart.o: \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_core_generic.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_common.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_assert.h \
- /home/lmh/SimplicityStudio/v5_workspace/cubesat_RX/autogen/sl_component_catalog.h \
- /home/lmh/SimplicityStudio/v5_workspace/cubesat_RX/config/emlib_core_debug_config.h \
+ /home/lmh/SimplicityStudio/v5_workspace/cubesat_RX_IWSB/autogen/sl_component_catalog.h \
+ /home/lmh/SimplicityStudio/v5_workspace/cubesat_RX_IWSB/config/emlib_core_debug_config.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_cmu_compat.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_gpio.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_enum.h \
@@ -135,8 +135,8 @@ gecko_sdk_4.5.0/platform/emlib/src/em_usart.o: \
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_core_generic.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_common.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_assert.h:
-/home/lmh/SimplicityStudio/v5_workspace/cubesat_RX/autogen/sl_component_catalog.h:
-/home/lmh/SimplicityStudio/v5_workspace/cubesat_RX/config/emlib_core_debug_config.h:
+/home/lmh/SimplicityStudio/v5_workspace/cubesat_RX_IWSB/autogen/sl_component_catalog.h:
+/home/lmh/SimplicityStudio/v5_workspace/cubesat_RX_IWSB/config/emlib_core_debug_config.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_cmu_compat.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_gpio.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_enum.h:

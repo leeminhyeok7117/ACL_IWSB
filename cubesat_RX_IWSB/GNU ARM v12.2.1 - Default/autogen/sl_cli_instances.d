@@ -2,9 +2,9 @@ autogen/sl_cli_instances.o: ../autogen/sl_cli_instances.c \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/toolchain/inc/sl_gcc_preinclude.h \
  ../autogen/sl_component_catalog.h ../autogen/sl_cli_instances.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/cli/inc/sl_cli.h \
- /home/lmh/SimplicityStudio/v5_workspace/cubesat_RX/autogen/sl_component_catalog.h \
+ /home/lmh/SimplicityStudio/v5_workspace/cubesat_RX_IWSB/autogen/sl_component_catalog.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/cli/inc/sl_cli_types.h \
- /home/lmh/SimplicityStudio/v5_workspace/cubesat_RX/config/sl_cli_config.h \
+ /home/lmh/SimplicityStudio/v5_workspace/cubesat_RX_IWSB/config/sl_cli_config.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_status.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_slist.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/iostream/inc/sl_iostream.h \
@@ -12,11 +12,11 @@ autogen/sl_cli_instances.o: ../autogen/sl_cli_instances.c \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/cli/inc/sl_cli_command.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/cli/inc/sl_cli_arguments.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_string.h \
- /home/lmh/SimplicityStudio/v5_workspace/cubesat_RX/config/sl_cli_config_example.h \
+ /home/lmh/SimplicityStudio/v5_workspace/cubesat_RX_IWSB/config/sl_cli_config_example.h \
  ../autogen/sl_iostream_handles.h \
  ../autogen/sl_iostream_init_usart_instances.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/power_manager/inc/sl_power_manager.h \
- /home/lmh/SimplicityStudio/v5_workspace/cubesat_RX/config/sl_power_manager_config.h \
+ /home/lmh/SimplicityStudio/v5_workspace/cubesat_RX_IWSB/config/sl_power_manager_config.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/sleeptimer/inc/sl_sleeptimer.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_common.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_assert.h \
@@ -81,14 +81,14 @@ autogen/sl_cli_instances.o: ../autogen/sl_cli_instances.c \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emdrv/dmadrv/inc/dmadrv.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emdrv/common/inc/ecode.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_ldma.h \
- /home/lmh/SimplicityStudio/v5_workspace/cubesat_RX/config/dmadrv_config.h
+ /home/lmh/SimplicityStudio/v5_workspace/cubesat_RX_IWSB/config/dmadrv_config.h
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/toolchain/inc/sl_gcc_preinclude.h:
 ../autogen/sl_component_catalog.h:
 ../autogen/sl_cli_instances.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/cli/inc/sl_cli.h:
-/home/lmh/SimplicityStudio/v5_workspace/cubesat_RX/autogen/sl_component_catalog.h:
+/home/lmh/SimplicityStudio/v5_workspace/cubesat_RX_IWSB/autogen/sl_component_catalog.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/cli/inc/sl_cli_types.h:
-/home/lmh/SimplicityStudio/v5_workspace/cubesat_RX/config/sl_cli_config.h:
+/home/lmh/SimplicityStudio/v5_workspace/cubesat_RX_IWSB/config/sl_cli_config.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_status.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_slist.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/iostream/inc/sl_iostream.h:
@@ -96,11 +96,11 @@ autogen/sl_cli_instances.o: ../autogen/sl_cli_instances.c \
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/cli/inc/sl_cli_command.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/cli/inc/sl_cli_arguments.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_string.h:
-/home/lmh/SimplicityStudio/v5_workspace/cubesat_RX/config/sl_cli_config_example.h:
+/home/lmh/SimplicityStudio/v5_workspace/cubesat_RX_IWSB/config/sl_cli_config_example.h:
 ../autogen/sl_iostream_handles.h:
 ../autogen/sl_iostream_init_usart_instances.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/power_manager/inc/sl_power_manager.h:
-/home/lmh/SimplicityStudio/v5_workspace/cubesat_RX/config/sl_power_manager_config.h:
+/home/lmh/SimplicityStudio/v5_workspace/cubesat_RX_IWSB/config/sl_power_manager_config.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/sleeptimer/inc/sl_sleeptimer.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_common.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_assert.h:
@@ -165,4 +165,4 @@ autogen/sl_cli_instances.o: ../autogen/sl_cli_instances.c \
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emdrv/dmadrv/inc/dmadrv.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emdrv/common/inc/ecode.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_ldma.h:
-/home/lmh/SimplicityStudio/v5_workspace/cubesat_RX/config/dmadrv_config.h:
+/home/lmh/SimplicityStudio/v5_workspace/cubesat_RX_IWSB/config/dmadrv_config.h:

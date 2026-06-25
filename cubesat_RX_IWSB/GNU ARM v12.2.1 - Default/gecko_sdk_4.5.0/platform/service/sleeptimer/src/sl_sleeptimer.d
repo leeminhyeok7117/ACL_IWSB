@@ -62,11 +62,11 @@ gecko_sdk_4.5.0/platform/service/sleeptimer/src/sl_sleeptimer.o: \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_assert.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk/platform/service/sleeptimer/src/sli_sleeptimer_hal.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/sleeptimer/inc/sli_sleeptimer.h \
- /home/lmh/SimplicityStudio/v5_workspace/cubesat_RX/config/sl_sleeptimer_config.h \
+ /home/lmh/SimplicityStudio/v5_workspace/cubesat_RX_IWSB/config/sl_sleeptimer_config.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_atomic.h \
- /home/lmh/SimplicityStudio/v5_workspace/cubesat_RX/autogen/sl_component_catalog.h \
+ /home/lmh/SimplicityStudio/v5_workspace/cubesat_RX_IWSB/autogen/sl_component_catalog.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/power_manager/inc/sl_power_manager.h \
- /home/lmh/SimplicityStudio/v5_workspace/cubesat_RX/config/sl_power_manager_config.h \
+ /home/lmh/SimplicityStudio/v5_workspace/cubesat_RX_IWSB/config/sl_power_manager_config.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_slist.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_enum.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/power_manager/inc/sli_power_manager.h \
@@ -133,11 +133,11 @@ gecko_sdk_4.5.0/platform/service/sleeptimer/src/sl_sleeptimer.o: \
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_assert.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk/platform/service/sleeptimer/src/sli_sleeptimer_hal.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/sleeptimer/inc/sli_sleeptimer.h:
-/home/lmh/SimplicityStudio/v5_workspace/cubesat_RX/config/sl_sleeptimer_config.h:
+/home/lmh/SimplicityStudio/v5_workspace/cubesat_RX_IWSB/config/sl_sleeptimer_config.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_atomic.h:
-/home/lmh/SimplicityStudio/v5_workspace/cubesat_RX/autogen/sl_component_catalog.h:
+/home/lmh/SimplicityStudio/v5_workspace/cubesat_RX_IWSB/autogen/sl_component_catalog.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/power_manager/inc/sl_power_manager.h:
-/home/lmh/SimplicityStudio/v5_workspace/cubesat_RX/config/sl_power_manager_config.h:
+/home/lmh/SimplicityStudio/v5_workspace/cubesat_RX_IWSB/config/sl_power_manager_config.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_slist.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_enum.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/power_manager/inc/sli_power_manager.h:

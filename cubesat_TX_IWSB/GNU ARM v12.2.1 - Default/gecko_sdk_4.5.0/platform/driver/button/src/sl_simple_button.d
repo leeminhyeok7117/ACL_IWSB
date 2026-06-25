@@ -66,10 +66,10 @@ gecko_sdk_4.5.0/platform/driver/button/src/sl_simple_button.o: \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_bus.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_core.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_core_generic.h \
- /home/lmh/SimplicityStudio/v5_workspace/cubesat_TX/autogen/sl_component_catalog.h \
- /home/lmh/SimplicityStudio/v5_workspace/cubesat_TX/config/emlib_core_debug_config.h \
+ /home/lmh/SimplicityStudio/v5_workspace/cubesat_TX_IWSB/autogen/sl_component_catalog.h \
+ /home/lmh/SimplicityStudio/v5_workspace/cubesat_TX_IWSB/config/emlib_core_debug_config.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_enum.h \
- /home/lmh/SimplicityStudio/v5_workspace/cubesat_TX/config/sl_simple_button_config.h \
+ /home/lmh/SimplicityStudio/v5_workspace/cubesat_TX_IWSB/config/sl_simple_button_config.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emdrv/gpiointerrupt/inc/gpiointerrupt.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_cmu.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_cmu_compat.h \
@@ -141,10 +141,10 @@ gecko_sdk_4.5.0/platform/driver/button/src/sl_simple_button.o: \
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_bus.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_core.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_core_generic.h:
-/home/lmh/SimplicityStudio/v5_workspace/cubesat_TX/autogen/sl_component_catalog.h:
-/home/lmh/SimplicityStudio/v5_workspace/cubesat_TX/config/emlib_core_debug_config.h:
+/home/lmh/SimplicityStudio/v5_workspace/cubesat_TX_IWSB/autogen/sl_component_catalog.h:
+/home/lmh/SimplicityStudio/v5_workspace/cubesat_TX_IWSB/config/emlib_core_debug_config.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_enum.h:
-/home/lmh/SimplicityStudio/v5_workspace/cubesat_TX/config/sl_simple_button_config.h:
+/home/lmh/SimplicityStudio/v5_workspace/cubesat_TX_IWSB/config/sl_simple_button_config.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emdrv/gpiointerrupt/inc/gpiointerrupt.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_cmu.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_cmu_compat.h:

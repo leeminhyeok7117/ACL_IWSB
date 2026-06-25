@@ -2,7 +2,7 @@ gecko_sdk_4.5.0/platform/service/iostream/src/sl_iostream.o: \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk/platform/service/iostream/src/sl_iostream.c \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/toolchain/inc/sl_gcc_preinclude.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/iostream/inc/sl_iostream.h \
- /home/lmh/SimplicityStudio/v5_workspace/cubesat_TX/autogen/sl_component_catalog.h \
+ /home/lmh/SimplicityStudio/v5_workspace/cubesat_TX_IWSB/autogen/sl_component_catalog.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_enum.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_status.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_core.h \
@@ -63,11 +63,11 @@ gecko_sdk_4.5.0/platform/service/iostream/src/sl_iostream.o: \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_core_generic.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_common.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_assert.h \
- /home/lmh/SimplicityStudio/v5_workspace/cubesat_TX/config/emlib_core_debug_config.h \
+ /home/lmh/SimplicityStudio/v5_workspace/cubesat_TX_IWSB/config/emlib_core_debug_config.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//util/third_party/printf/printf.h
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/toolchain/inc/sl_gcc_preinclude.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/iostream/inc/sl_iostream.h:
-/home/lmh/SimplicityStudio/v5_workspace/cubesat_TX/autogen/sl_component_catalog.h:
+/home/lmh/SimplicityStudio/v5_workspace/cubesat_TX_IWSB/autogen/sl_component_catalog.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_enum.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_status.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_core.h:
@@ -128,5 +128,5 @@ gecko_sdk_4.5.0/platform/service/iostream/src/sl_iostream.o: \
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_core_generic.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_common.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_assert.h:
-/home/lmh/SimplicityStudio/v5_workspace/cubesat_TX/config/emlib_core_debug_config.h:
+/home/lmh/SimplicityStudio/v5_workspace/cubesat_TX_IWSB/config/emlib_core_debug_config.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//util/third_party/printf/printf.h:

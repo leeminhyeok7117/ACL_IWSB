@@ -170,6 +170,369 @@ static bool     poll_running          = false;
 static sl_sleeptimer_timer_handle_t poll_cycle_timer;
 
 // -----------------------------------------------------------------------------
+//   RSSI 측정 로그 — 외부 SPI 플래시 (날개 전개 감지용)
+//
+//   설계 메모:
+//   - append-only 링이 아닌 "정지형" 로그. 영역(2MB=262144 레코드)이 가득 차면
+//     더 쓰지 않는다(측정 데이터 보존 우선). clear 로 비운 뒤 재사용.
+//   - NOR 플래시는 1→0 만 가능 → 섹터 단위 erase 후 순차 기록. 레코드(8B)가
+//     섹터(4096B)에 512개 정확히 들어가므로 레코드가 섹터 경계를 가로지르지 않음.
+//   - 쓰기 커서(절대주소)는 NVM3 에 영속화 → 전원 차단/리셋 후에도 이어쓰기.
+//   - bootloader_*RawStorage 만 사용(직접 SPI 드라이버 X) → OTA/golden 경로와 동일.
+//   - 칩이 기대보다 작으면(<4MB) 로깅을 조용히 비활성화하여 golden 영역 침범을 원천차단.
+// -----------------------------------------------------------------------------
+static uint32_t s_rssi_write_addr = RSSI_LOG_BASE_ADDR;
+static uint32_t s_rssi_page       = 4096;
+static bool     s_rssi_ready      = false;
+
+bool rssi_log_ready(void) { return s_rssi_ready; }
+
+void rssi_log_init(void)
+{
+  s_rssi_ready = false;
+
+  BootloaderStorageInformation_t info;
+  bootloader_getStorageInfo(&info);
+  if (info.info == NULL) {
+    app_log_error("[RSSI] no storage info — logging DISABLED.\n");
+    return;
+  }
+  s_rssi_page = info.info->pageSize ? info.info->pageSize : 4096;
+  uint32_t part = info.info->partSize;
+
+  // 칩 크기 검증: 우리 영역이 칩을 벗어나면 비활성(golden 보호 보험).
+  if (part == 0 || (RSSI_LOG_BASE_ADDR + RSSI_LOG_REGION_SIZE) > part) {
+    app_log_error("[RSSI] flash too small (part=%lu) — logging DISABLED.\n",
+                  (unsigned long)part);
+    return;
+  }
+  // 레코드가 섹터에 정수배로 들어가야 경계 처리가 단순.
+  if (s_rssi_page == 0 || (s_rssi_page % sizeof(rssi_record_t)) != 0) {
+    app_log_error("[RSSI] page(%lu) not multiple of record — logging DISABLED.\n",
+                  (unsigned long)s_rssi_page);
+    return;
+  }
+
+  // 쓰기 커서 복원(없거나 손상 시 영역 시작으로).
+  uint32_t cursor = RSSI_LOG_BASE_ADDR;
+  Ecode_t ec = nvm3_readData(nvm3_defaultHandle, NVM3_KEY_RSSI_LOG_CURSOR,
+                             &cursor, sizeof(cursor));
+  if (ec != ECODE_NVM3_OK
+      || cursor < RSSI_LOG_BASE_ADDR
+      || cursor > (RSSI_LOG_BASE_ADDR + RSSI_LOG_REGION_SIZE)
+      || ((cursor - RSSI_LOG_BASE_ADDR) % sizeof(rssi_record_t)) != 0) {
+    cursor = RSSI_LOG_BASE_ADDR;
+  }
+  s_rssi_write_addr = cursor;
+  s_rssi_ready = true;
+  app_log_info("[RSSI] log ready. page=%lu part=%lu count=%lu\n",
+               (unsigned long)s_rssi_page, (unsigned long)part,
+               (unsigned long)rssi_log_count());
+}
+
+uint32_t rssi_log_count(void)
+{
+  if (!s_rssi_ready) return 0;
+  return (s_rssi_write_addr - RSSI_LOG_BASE_ADDR) / sizeof(rssi_record_t);
+}
+
+bool rssi_log_append(const rssi_record_t *rec)
+{
+  if (!s_rssi_ready || rec == NULL) return false;
+
+  // 영역 가득 → 정지(덮어쓰지 않음). clear 후 재사용.
+  if (s_rssi_write_addr + sizeof(rssi_record_t)
+      > RSSI_LOG_BASE_ADDR + RSSI_LOG_REGION_SIZE) {
+    return false;
+  }
+
+  // 섹터의 첫 레코드면 그 섹터를 먼저 erase(append-only NOR).
+  if ((s_rssi_write_addr % s_rssi_page) == 0) {
+    if (bootloader_eraseRawStorage(s_rssi_write_addr, s_rssi_page) != BOOTLOADER_OK) {
+      app_log_error("[RSSI] erase fail @0x%lX\n", (unsigned long)s_rssi_write_addr);
+      return false;
+    }
+  }
+  if (bootloader_writeRawStorage(s_rssi_write_addr,
+                                 (uint8_t *)rec, sizeof(*rec)) != BOOTLOADER_OK) {
+    app_log_error("[RSSI] write fail @0x%lX\n", (unsigned long)s_rssi_write_addr);
+    return false;
+  }
+  s_rssi_write_addr += sizeof(*rec);
+
+  // 커서 영속화(전원안전). 측정은 간헐적이라 매 레코드 저장해도 부담 적음.
+  nvm3_writeData(nvm3_defaultHandle, NVM3_KEY_RSSI_LOG_CURSOR,
+                 &s_rssi_write_addr, sizeof(s_rssi_write_addr));
+  return true;
+}
+
+bool rssi_log_read(uint32_t index, rssi_record_t *out)
+{
+  if (!s_rssi_ready || out == NULL || index >= rssi_log_count()) return false;
+  uint32_t addr = RSSI_LOG_BASE_ADDR + index * sizeof(rssi_record_t);
+  return (bootloader_readRawStorage(addr, (uint8_t *)out, sizeof(*out))
+          == BOOTLOADER_OK);
+}
+
+void rssi_log_clear(void)
+{
+  s_rssi_write_addr = RSSI_LOG_BASE_ADDR;
+  nvm3_writeData(nvm3_defaultHandle, NVM3_KEY_RSSI_LOG_CURSOR,
+                 &s_rssi_write_addr, sizeof(s_rssi_write_addr));
+  // 물리 erase 는 다음 append 시 섹터 단위로 lazy 수행 → 즉시 전체 erase 불필요.
+}
+
+// -----------------------------------------------------------------------------
+//   RSSI 측정 캠페인 — TX(coordinator) 오케스트레이터
+//
+//   (송신원 t, 채널 ch) 라운드를 순회:
+//     t = 0(=TX 자신), 1..MAX_SLAVES(=RX device_id),  ch = MEAS_CH_FIRST..LAST
+//   각 라운드: MEAS_CMD 브로드캐스트 → 전 노드 ch 전환 → 송신원 비콘 N개 →
+//              나머지 측정 → home 복귀 → 리포트 수집 → 외부 플래시 저장.
+//   캠페인 동안 폴링은 일시 중단(emberAfTickCallback 에서 분기).
+//   ※ 측정 채널 전환은 모두 tick 컨텍스트(메시지/타이머 콜백 아님)에서 수행.
+// -----------------------------------------------------------------------------
+typedef enum {
+  MEAS_TX_IDLE = 0,
+  MEAS_TX_ROUND_CMD,   // MEAS_CMD 송신 + 채널 전환
+  MEAS_TX_ON_CHANNEL,  // 비콘 송신(t==TX) 또는 청취
+  MEAS_TX_COLLECT      // home 복귀 후 리포트 수집
+} meas_tx_state_t;
+
+static meas_tx_state_t meas_tx_state = MEAS_TX_IDLE;
+static uint8_t   meas_tx_t        = 0;   // 현재 송신원 device_id (0=TX)
+static uint8_t   meas_tx_ch       = 0;   // 현재 채널
+static uint8_t   meas_tx_seq      = 0;   // 라운드 시퀀스(증가)
+static uint16_t  meas_tx_home     = 0;
+static uint32_t  meas_tx_t0       = 0;   // 윈도/수집 시작 tick
+static uint32_t  meas_tx_lastbcn  = 0;
+static uint8_t   meas_tx_bcnsent  = 0;
+static int32_t   meas_tx_rssi_sum = 0;   // TX 자신이 청취한 누적
+static uint16_t  meas_tx_rssi_cnt = 0;
+static int8_t    meas_tx_last_lqi = 0;
+
+// 자동 모드: 캠페인을 주기적으로 반복(날개 전개를 시간에 따라 추적).
+static bool      meas_auto_enabled = true;    // 기본 ON (계속 측정)
+static uint32_t  meas_last_end_tick = 0;      // 마지막 캠페인 종료 tick (간격 측정용)
+static bool      meas_first_run     = true;   // 부팅 후 첫 자동 시작 즉시 허용
+
+// 콜백에서 들어온 레코드를 tick 에서 flash 에 기록하기 위한 소형 큐
+// (콜백 컨텍스트에서 flash erase/write 금지 → tick 에서 drain).
+#define MEAS_RECQ_LEN 16U
+static rssi_record_t    meas_recq[MEAS_RECQ_LEN];
+static volatile uint8_t meas_recq_head = 0;
+static volatile uint8_t meas_recq_tail = 0;
+
+static void meas_tx_tick(void);   // 전방 선언(tick 콜백에서 호출)
+
+static inline uint16_t meas_uptime_s(void)
+{
+  return (uint16_t)(sl_sleeptimer_tick_to_ms(sl_sleeptimer_get_tick_count()) / 1000U);
+}
+
+static void meas_recq_push(uint8_t tx_id, uint8_t rx_id, uint8_t ch,
+                           int8_t rssi, uint8_t lqi, uint8_t seq)
+{
+  uint8_t next = (uint8_t)((meas_recq_head + 1U) % MEAS_RECQ_LEN);
+  if (next == meas_recq_tail) return;   // 가득 → 드롭(다음 라운드 재측정 가능)
+  rssi_record_t *r = &meas_recq[meas_recq_head];
+  r->tx_id   = tx_id; r->rx_id = rx_id; r->channel = ch;
+  r->rssi    = rssi;  r->lqi   = lqi;   r->seq     = seq;
+  r->tstamp_s = meas_uptime_s();
+  meas_recq_head = next;
+}
+
+// 리스너의 MEAS_REPORT 적재(콜백에서 호출). p: [1]seq [2]tx_id [3]ch [4]rx_id [5]rssi [6]lqi [7]cnt
+static void meas_tx_on_report(const uint8_t *p, uint8_t len)
+{
+  if (len < 8) return;
+  meas_recq_push(p[2], p[4], p[3], (int8_t)p[5], p[6], p[1]);
+}
+
+// TX 가 측정 채널에서 RX 비콘을 들었을 때 누적(콜백에서 호출).
+static void meas_tx_on_beacon(const EmberIncomingMessage *m)
+{
+  if (m->length < 4) return;
+  if (meas_tx_state == MEAS_TX_ON_CHANNEL
+      && m->payload[2] == meas_tx_t
+      && (m->payload[3] & 0x7FU) == (meas_tx_ch & 0x7FU)) {
+    meas_tx_rssi_sum += m->rssi;
+    meas_tx_last_lqi  = (int8_t)m->lqi;
+    meas_tx_rssi_cnt++;
+  }
+}
+
+bool meas_campaign_active(void) { return meas_tx_state != MEAS_TX_IDLE; }
+
+static bool meas_tx_ota_busy(void);   // 전방 선언
+
+void meas_campaign_start(void)
+{
+  if (meas_tx_state != MEAS_TX_IDLE) return;     // 이미 진행 중
+  if (meas_tx_ota_busy()) {
+    app_log_info("[MEAS] OTA busy — campaign deferred.\n");
+    return;                                      // OTA 중엔 측정 금지
+  }
+  if (!rssi_log_ready()) {
+    app_log_error("[MEAS] flash log not ready — campaign aborted.\n");
+    return;
+  }
+  meas_tx_t  = MEAS_TX_DEVICE_ID;   // 첫 송신원 = TX 자신
+  meas_tx_ch = MEAS_CH_FIRST;
+  meas_tx_seq++;
+  meas_tx_state = MEAS_TX_ROUND_CMD;
+  app_log_info("[MEAS] campaign start (t=0..%u, ch=%u..%u)\n",
+               (unsigned)MAX_SLAVES, (unsigned)MEAS_CH_FIRST, (unsigned)MEAS_CH_LAST);
+}
+
+static void meas_tx_send_cmd(void)
+{
+  uint8_t cmd[5] = {
+    MSG_TYPE_MEAS_CMD, meas_tx_seq, meas_tx_t,
+    (uint8_t)(meas_tx_ch | MEAS_BAND_915), MEAS_N_BEACONS
+  };
+  emberMessageSend(EMBER_BROADCAST_ADDRESS, CUSTOM_ENDPOINT, 0,
+                   sizeof(cmd), cmd, EMBER_OPTIONS_NONE);
+}
+
+static void meas_tx_send_beacon(uint8_t idx)
+{
+  uint8_t msg[5] = {
+    MSG_TYPE_MEAS_BEACON, meas_tx_seq, meas_tx_t,
+    (uint8_t)(meas_tx_ch | MEAS_BAND_915), idx
+  };
+  emberMessageSend(EMBER_BROADCAST_ADDRESS, CUSTOM_ENDPOINT, 0,
+                   sizeof(msg), msg, EMBER_OPTIONS_NONE);
+}
+
+// 다음 (t,ch) 라운드로 진행(채널 먼저 스윕, 끝나면 송신원 증가). 끝이면 IDLE.
+static void meas_tx_advance(void)
+{
+  if (meas_tx_ch < MEAS_CH_LAST) {
+    meas_tx_ch++;
+  } else {
+    meas_tx_ch = MEAS_CH_FIRST;
+    meas_tx_t++;
+  }
+  meas_tx_seq++;
+  if (meas_tx_t > MAX_SLAVES) {     // 0..MAX_SLAVES 송신원 모두 완료
+    meas_tx_state      = MEAS_TX_IDLE;
+    meas_last_end_tick = sl_sleeptimer_get_tick_count();   // 자동 재시작 간격 기준
+    app_log_info("[MEAS] campaign done. records=%lu\n",
+                 (unsigned long)rssi_log_count());
+  } else {
+    meas_tx_state = MEAS_TX_ROUND_CMD;
+  }
+}
+
+// OTA 진행 중 여부(측정과 배타). tick 의 ota_busy 와 동일 기준.
+static bool meas_tx_ota_busy(void)
+{
+  return (ota_state != OTA_IDLE
+          && ota_state != OTA_FW_READY_MANUAL
+          && ota_state != OTA_FW_READY);
+}
+
+// 캠페인을 즉시 중단하고 홈 채널로 안전 복귀(OTA 가 끼어들 때 호출).
+static void meas_tx_abort(void)
+{
+  if (meas_tx_state == MEAS_TX_IDLE) return;
+  emberSetRadioChannel(meas_tx_home);   // 측정 채널에 갇히지 않도록 복귀(home 기본 0)
+  meas_tx_state      = MEAS_TX_IDLE;
+  meas_last_end_tick = sl_sleeptimer_get_tick_count();
+  app_log_info("[MEAS] aborted (OTA busy). returned to home channel.\n");
+}
+
+// 자동 모드: 스택 up + 비-OTA + 간격 경과 시 다음 캠페인 시작.
+static void meas_auto_tick(void)
+{
+  if (!meas_auto_enabled || meas_campaign_active()) return;
+  if (!emberStackIsUp()) return;
+  uint32_t now = sl_sleeptimer_get_tick_count();
+  if (meas_first_run
+      || sl_sleeptimer_tick_to_ms(now - meas_last_end_tick) >= (uint32_t)MEAS_AUTO_GAP_S * 1000U) {
+    meas_first_run = false;
+    meas_campaign_start();
+  }
+}
+
+// 자동 모드 on/off (CLI 에서 호출).
+void meas_auto_set(bool en)
+{
+  meas_auto_enabled = en;
+  if (en) meas_first_run = true;   // 켜면 즉시 1회 시작 허용
+}
+bool meas_auto_get(void) { return meas_auto_enabled; }
+
+static void meas_tx_drain_recq(void)
+{
+  // tick 당 일부만 flash 기록(섹터 erase 로 인한 장시간 stall 방지).
+  uint8_t budget = 2;
+  while (budget-- && meas_recq_tail != meas_recq_head) {
+    rssi_log_append(&meas_recq[meas_recq_tail]);
+    meas_recq_tail = (uint8_t)((meas_recq_tail + 1U) % MEAS_RECQ_LEN);
+  }
+}
+
+static void meas_tx_tick(void)
+{
+  meas_tx_drain_recq();
+  uint32_t now = sl_sleeptimer_get_tick_count();
+
+  switch (meas_tx_state) {
+    case MEAS_TX_IDLE:
+      return;
+
+    case MEAS_TX_ROUND_CMD:
+      meas_tx_send_cmd();                       // 전 노드에 라운드 통지(브로드캐스트)
+      meas_tx_home     = emberGetRadioChannel();
+      meas_tx_rssi_sum = 0; meas_tx_rssi_cnt = 0; meas_tx_last_lqi = 0;
+      meas_tx_bcnsent  = 0;
+      if (emberSetRadioChannel(meas_tx_ch & 0x7FU) != EMBER_SUCCESS) {
+        meas_tx_advance();                      // 채널 전환 실패 → 라운드 스킵
+        return;
+      }
+      meas_tx_t0      = now;
+      meas_tx_lastbcn = now;
+      meas_tx_state   = MEAS_TX_ON_CHANNEL;
+      return;
+
+    case MEAS_TX_ON_CHANNEL: {
+      uint32_t el = sl_sleeptimer_tick_to_ms(now - meas_tx_t0);
+      // TX 가 송신원이면 비콘 송신, 아니면 청취(콜백서 누적).
+      if (meas_tx_t == MEAS_TX_DEVICE_ID && meas_tx_bcnsent < MEAS_N_BEACONS) {
+        if (el >= MEAS_BEACON_SETUP_MS
+            && sl_sleeptimer_tick_to_ms(now - meas_tx_lastbcn) >= MEAS_BEACON_GAP_MS) {
+          meas_tx_send_beacon(meas_tx_bcnsent);
+          meas_tx_bcnsent++;
+          meas_tx_lastbcn = now;
+        }
+      }
+      if (el >= MEAS_SLOT_MS) {
+        emberSetRadioChannel(meas_tx_home);     // home 복귀
+        // TX 가 청취자였고 비콘을 들었으면 자기 측정값 기록(t→TX).
+        if (meas_tx_t != MEAS_TX_DEVICE_ID && meas_tx_rssi_cnt > 0) {
+          int8_t avg = (int8_t)(meas_tx_rssi_sum / (int32_t)meas_tx_rssi_cnt);
+          meas_recq_push(meas_tx_t, MEAS_TX_DEVICE_ID,
+                         (uint8_t)(meas_tx_ch | MEAS_BAND_915),
+                         avg, (uint8_t)meas_tx_last_lqi, meas_tx_seq);
+        }
+        meas_tx_t0    = now;
+        meas_tx_state = MEAS_TX_COLLECT;
+      }
+      return;
+    }
+
+    case MEAS_TX_COLLECT:
+      // 이 동안 리스너 MEAS_REPORT 가 콜백→큐→drain 으로 flash 에 저장됨.
+      if (sl_sleeptimer_tick_to_ms(now - meas_tx_t0) >= MEAS_COLLECT_MS) {
+        meas_tx_advance();
+      }
+      return;
+  }
+}
+
+// -----------------------------------------------------------------------------
 //                          Public Function Definitions
 // -----------------------------------------------------------------------------
 
@@ -233,6 +596,16 @@ void emberAfIncomingMessageCallback(EmberIncomingMessage *message)
                    dev_id, message->source, fw_ver);
     }
     poll_waiting = false;   // 응답 수신 → 대기 해제
+    return;
+  }
+
+  // ─── [RSSI 측정] RX 비콘 청취(측정 채널) / 리스너 리포트 수신 ───────────────
+  if (msg_type == MSG_TYPE_MEAS_BEACON) {
+    meas_tx_on_beacon(message);
+    return;
+  }
+  if (msg_type == MSG_TYPE_MEAS_REPORT) {
+    meas_tx_on_report(message->payload, message->length);
     return;
   }
 
@@ -346,6 +719,7 @@ void emberAfTickCallback(void)
   if (!slave_table_loaded) {
     slave_table_loaded = true;
     load_slave_table_nvm3();
+    rssi_log_init();   // [RSSI] 외부 플래시 로그 지오메트리 검증 + 커서 복원
     // 2초 주기로 CPU를 깨워 어떤 폴링 상태에서도 tick이 멈추지 않게 한다.
     sl_sleeptimer_start_periodic_timer_ms(&s_heartbeat_timer, 2000,
                                           heartbeat_timer_cb, NULL, 0, 0);
@@ -407,12 +781,23 @@ void emberAfTickCallback(void)
     process_obc_command();
   }
 
-  // ─── 폴링: OTA 진행 중이 아닐 때만 실행 ──────────────────────────────────
+  // ─── 폴링 / RSSI 측정 ─────────────────────────────────────────────────────
+  //   캠페인 진행 중엔 폴링을 멈추고 측정 상태머신을 구동(라디오/채널 경합 방지).
+  //   OTA 가 캠페인 도중 시작되면 즉시 중단+홈 복귀(측정 채널에 갇히지 않게).
   bool ota_busy = (ota_state != OTA_IDLE
                    && ota_state != OTA_FW_READY_MANUAL
                    && ota_state != OTA_FW_READY);
-  if (poll_running && !ota_busy) {
-    poll_tick();
+  if (meas_campaign_active()) {
+    if (ota_busy) {
+      meas_tx_abort();
+    } else {
+      meas_tx_tick();
+    }
+  } else if (!ota_busy) {
+    meas_auto_tick();                 // 자동 모드: 주기적으로 캠페인 재시작
+    if (!meas_campaign_active() && poll_running) {
+      poll_tick();
+    }
   }
 
   ota_state_machine_tick();

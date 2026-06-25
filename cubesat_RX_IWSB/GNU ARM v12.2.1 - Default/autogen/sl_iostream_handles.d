@@ -1,14 +1,14 @@
 autogen/sl_iostream_handles.o: ../autogen/sl_iostream_handles.c \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/toolchain/inc/sl_gcc_preinclude.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/iostream/inc/sl_iostream.h \
- /home/lmh/SimplicityStudio/v5_workspace/cubesat_RX/autogen/sl_component_catalog.h \
+ /home/lmh/SimplicityStudio/v5_workspace/cubesat_RX_IWSB/autogen/sl_component_catalog.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_enum.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_status.h \
  ../autogen/sl_iostream_handles.h \
  ../autogen/sl_iostream_init_usart_instances.h \
  ../autogen/sl_component_catalog.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/power_manager/inc/sl_power_manager.h \
- /home/lmh/SimplicityStudio/v5_workspace/cubesat_RX/config/sl_power_manager_config.h \
+ /home/lmh/SimplicityStudio/v5_workspace/cubesat_RX_IWSB/config/sl_power_manager_config.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_slist.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/sleeptimer/inc/sl_sleeptimer.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_common.h \
@@ -74,17 +74,17 @@ autogen/sl_iostream_handles.o: ../autogen/sl_iostream_handles.c \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emdrv/dmadrv/inc/dmadrv.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emdrv/common/inc/ecode.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_ldma.h \
- /home/lmh/SimplicityStudio/v5_workspace/cubesat_RX/config/dmadrv_config.h
+ /home/lmh/SimplicityStudio/v5_workspace/cubesat_RX_IWSB/config/dmadrv_config.h
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/toolchain/inc/sl_gcc_preinclude.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/iostream/inc/sl_iostream.h:
-/home/lmh/SimplicityStudio/v5_workspace/cubesat_RX/autogen/sl_component_catalog.h:
+/home/lmh/SimplicityStudio/v5_workspace/cubesat_RX_IWSB/autogen/sl_component_catalog.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_enum.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_status.h:
 ../autogen/sl_iostream_handles.h:
 ../autogen/sl_iostream_init_usart_instances.h:
 ../autogen/sl_component_catalog.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/power_manager/inc/sl_power_manager.h:
-/home/lmh/SimplicityStudio/v5_workspace/cubesat_RX/config/sl_power_manager_config.h:
+/home/lmh/SimplicityStudio/v5_workspace/cubesat_RX_IWSB/config/sl_power_manager_config.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_slist.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/sleeptimer/inc/sl_sleeptimer.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_common.h:
@@ -150,4 +150,4 @@ autogen/sl_iostream_handles.o: ../autogen/sl_iostream_handles.c \
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emdrv/dmadrv/inc/dmadrv.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emdrv/common/inc/ecode.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_ldma.h:
-/home/lmh/SimplicityStudio/v5_workspace/cubesat_RX/config/dmadrv_config.h:
+/home/lmh/SimplicityStudio/v5_workspace/cubesat_RX_IWSB/config/dmadrv_config.h:

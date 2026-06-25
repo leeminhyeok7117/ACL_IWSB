@@ -151,6 +151,38 @@ static sl_sleeptimer_timer_handle_t bootload_timer;
 static sl_sleeptimer_timer_handle_t verify_timer;
 static sl_sleeptimer_timer_handle_t id_announce_timer;
 
+// ─── [RSSI 측정] 상태머신 (tick 기반, 콜백 컨텍스트 안전) ─────────────────────
+//   MEAS_CMD 수신 시 콜백에서는 파라미터만 적재(pending) → tick 에서 채널전환/
+//   비콘송신/복귀/리포트 처리. 측정 윈도 동안 EM1 로 sleep 차단(루프 고속 회전).
+typedef enum {
+  MEAS_RX_IDLE = 0,     // 평시 (home 채널 ch0)
+  MEAS_RX_ON_CHANNEL,   // 측정 채널 전환됨 (비콘 송신 또는 청취)
+  MEAS_RX_REPORTING     // home 복귀 후 리포트 전송 대기(스태거)
+} meas_rx_state_t;
+
+static volatile bool    meas_cmd_pending  = false;   // 콜백→tick 인계
+static uint8_t          meas_p_seq        = 0;       // 인계 파라미터(콜백이 채움)
+static uint8_t          meas_p_tx_id      = 0;
+static uint8_t          meas_p_channel    = 0;
+static uint8_t          meas_p_nbeacons   = 0;
+
+static meas_rx_state_t  meas_rx_state     = MEAS_RX_IDLE;
+static uint8_t          meas_cur_seq      = 0;       // 처리 중 라운드 파라미터
+static uint8_t          meas_cur_tx_id    = 0;
+static uint8_t          meas_cur_channel  = 0;
+static uint8_t          meas_cur_nbeacons = 0;
+static uint16_t         meas_home_channel = 0;
+static uint32_t         meas_win_start    = 0;       // 측정 윈도 시작 tick
+static uint32_t         meas_last_beacon  = 0;
+static uint8_t          meas_beacons_sent = 0;
+static int32_t          meas_rssi_sum     = 0;       // 청취 누적(평균용)
+static uint16_t         meas_rssi_cnt     = 0;
+static int8_t           meas_last_lqi     = 0;
+static uint32_t         meas_report_due   = 0;
+static bool             meas_no_sleep_req = false;
+
+static void meas_rx_tick(void);
+
 // -----------------------------------------------------------------------------
 //                          Public Function Definitions
 // -----------------------------------------------------------------------------
@@ -168,6 +200,30 @@ void emberAfIncomingMessageCallback(EmberIncomingMessage *message)
     }
     if (msg_type == MSG_TYPE_OTA_PREPARE) {
       handle_ota_prepare_msg(message);
+      return;
+    }
+    // ─── [RSSI 측정] TX 의 라운드 명령 → tick 에 인계(채널전환은 콜백에서 안 함) ──
+    if (msg_type == MSG_TYPE_MEAS_CMD) {
+      if (message->length < 5) return;
+      if (ota_download_active) return;            // OTA 중엔 측정 금지
+      meas_p_seq      = message->payload[1];
+      meas_p_tx_id    = message->payload[2];
+      meas_p_channel  = message->payload[3];
+      meas_p_nbeacons = message->payload[4];
+      meas_cmd_pending = true;
+      return;
+    }
+    // ─── [RSSI 측정] 측정 채널에서 비콘 수신 → RSSI 누적 ───────────────────────
+    if (msg_type == MSG_TYPE_MEAS_BEACON) {
+      if (message->length < 4) return;
+      // 현재 라운드의 송신원/채널과 일치할 때만 집계.
+      if (meas_rx_state == MEAS_RX_ON_CHANNEL
+          && message->payload[2] == meas_cur_tx_id
+          && (message->payload[3] & 0x7FU) == (meas_cur_channel & 0x7FU)) {
+        meas_rssi_sum += message->rssi;
+        meas_last_lqi  = (int8_t)message->lqi;
+        meas_rssi_cnt++;
+      }
       return;
     }
   }
@@ -349,6 +405,9 @@ void emberAfTickCallback(void)
   // 가입 상태 → 미가입 타이머 리셋
   unjoined_since_tick = 0;
 
+  // ─── [RSSI 측정] 라운드 상태머신 (가입 + 비-OTA 일 때만) ─────────────────────
+  meas_rx_tick();
+
   // ─── [H-1] OTA 슬롯 erase defer ─────────────────────────────────────────
   // 메시지 콜백에서 직접 erase 하면 수백ms 블로킹 → 여기서 처리
   if (ota_erase_pending) {
@@ -459,6 +518,124 @@ void emberAfEnergyScanCompleteCallback(int8_t mean, int8_t min,
 // -----------------------------------------------------------------------------
 //                          Static Function Definitions
 // -----------------------------------------------------------------------------
+
+// ─── [RSSI 측정] 측정 윈도 동안 EM1 sleep 차단(루프 고속 회전 → 비콘 타이밍 보장) ──
+static void meas_rx_set_sleep_block(bool block)
+{
+  if (block && !meas_no_sleep_req) {
+    sl_power_manager_add_em_requirement(SL_POWER_MANAGER_EM1);
+    meas_no_sleep_req = true;
+  } else if (!block && meas_no_sleep_req) {
+    sl_power_manager_remove_em_requirement(SL_POWER_MANAGER_EM1);
+    meas_no_sleep_req = false;
+  }
+}
+
+// ─── [RSSI 측정] 빈 비콘 1개 브로드캐스트(송신원 전용) ────────────────────────
+static void meas_rx_send_beacon(uint8_t beacon_idx)
+{
+  uint8_t msg[5] = {
+    MSG_TYPE_MEAS_BEACON, meas_cur_seq, meas_cur_tx_id, meas_cur_channel, beacon_idx
+  };
+  // 브로드캐스트(단일홉) → 이웃 RX/TX가 직접 듣고 RSSI 측정. ACK 불가 → OPTIONS_NONE.
+  emberMessageSend(EMBER_BROADCAST_ADDRESS, CUSTOM_ENDPOINT, 0,
+                   sizeof(msg), msg, EMBER_OPTIONS_NONE);
+}
+
+// ─── [RSSI 측정] 청취 결과를 TX(coordinator)로 리포트 ────────────────────────
+static void meas_rx_send_report(void)
+{
+  int8_t avg = (meas_rssi_cnt > 0)
+                 ? (int8_t)(meas_rssi_sum / (int32_t)meas_rssi_cnt) : 0;
+  uint8_t cnt8 = (meas_rssi_cnt > 255) ? 255 : (uint8_t)meas_rssi_cnt;
+  uint8_t msg[8] = {
+    MSG_TYPE_MEAS_REPORT, meas_cur_seq, meas_cur_tx_id, meas_cur_channel,
+    my_device_id, (uint8_t)avg, (uint8_t)meas_last_lqi, cnt8
+  };
+  emberMessageSend(EMBER_COORDINATOR_ADDRESS, CUSTOM_ENDPOINT, 0,
+                   sizeof(msg), msg, tx_options);
+}
+
+// ─── [RSSI 측정] tick 상태머신 ───────────────────────────────────────────────
+static void meas_rx_tick(void)
+{
+  // OTA 중이면 측정 중단하고 home 으로 안전 복귀.
+  if (ota_download_active) {
+    if (meas_rx_state != MEAS_RX_IDLE) {
+      emberSetRadioChannel(meas_home_channel);
+      meas_rx_set_sleep_block(false);
+      meas_rx_state = MEAS_RX_IDLE;
+    }
+    meas_cmd_pending = false;
+    return;
+  }
+
+  uint32_t now = sl_sleeptimer_get_tick_count();
+
+  // ─── 새 라운드 명령 처리(IDLE 일 때만 수락) ───────────────────────────────
+  if (meas_cmd_pending && meas_rx_state == MEAS_RX_IDLE) {
+    meas_cmd_pending  = false;
+    meas_cur_seq      = meas_p_seq;
+    meas_cur_tx_id    = meas_p_tx_id;
+    meas_cur_channel  = meas_p_channel;
+    meas_cur_nbeacons = meas_p_nbeacons;
+
+    meas_home_channel = emberGetRadioChannel();   // 복귀용 home 채널 캡처(보통 0)
+    meas_rssi_sum = 0; meas_rssi_cnt = 0; meas_last_lqi = 0;
+    meas_beacons_sent = 0;
+
+    meas_rx_set_sleep_block(true);                // 윈도 동안 sleep 차단
+    if (emberSetRadioChannel(meas_cur_channel & 0x7FU) != EMBER_SUCCESS) {
+      // 채널 전환 실패 → 즉시 포기(home 유지).
+      meas_rx_set_sleep_block(false);
+      return;
+    }
+    meas_win_start   = now;
+    meas_last_beacon = now;
+    meas_rx_state    = MEAS_RX_ON_CHANNEL;
+    return;
+  }
+
+  // ─── 측정 채널 활동 ───────────────────────────────────────────────────────
+  if (meas_rx_state == MEAS_RX_ON_CHANNEL) {
+    uint32_t el = sl_sleeptimer_tick_to_ms(now - meas_win_start);
+
+    // 내가 송신원이면: SETUP 후 GAP 간격으로 비콘 N개 송신.
+    if (meas_cur_tx_id == my_device_id && meas_beacons_sent < meas_cur_nbeacons) {
+      if (el >= MEAS_BEACON_SETUP_MS
+          && sl_sleeptimer_tick_to_ms(now - meas_last_beacon) >= MEAS_BEACON_GAP_MS) {
+        meas_rx_send_beacon(meas_beacons_sent);
+        meas_beacons_sent++;
+        meas_last_beacon = now;
+      }
+    }
+
+    // 슬롯 종료 → home 복귀.
+    if (el >= MEAS_SLOT_MS) {
+      emberSetRadioChannel(meas_home_channel);
+      // 청취자였고 비콘을 들었으면 리포트 예약(device_id 만큼 스태거).
+      if (meas_cur_tx_id != my_device_id && meas_rssi_cnt > 0) {
+        meas_report_due = now;   // 기준 시각; 아래에서 스태거 적용
+        meas_rx_state   = MEAS_RX_REPORTING;
+      } else {
+        meas_rx_set_sleep_block(false);
+        meas_rx_state = MEAS_RX_IDLE;
+      }
+    }
+    return;
+  }
+
+  // ─── home 복귀 후 리포트 전송(충돌 방지 스태거) ───────────────────────────
+  if (meas_rx_state == MEAS_RX_REPORTING) {
+    uint32_t since = sl_sleeptimer_tick_to_ms(now - meas_report_due);
+    if (since >= (uint32_t)my_device_id * MEAS_REPORT_GAP_MS) {
+      meas_rx_send_report();
+      meas_rx_set_sleep_block(false);
+      meas_rx_state = MEAS_RX_IDLE;
+    }
+    return;
+  }
+}
 
 static void handle_poll_request(EmberIncomingMessage *message)
 {

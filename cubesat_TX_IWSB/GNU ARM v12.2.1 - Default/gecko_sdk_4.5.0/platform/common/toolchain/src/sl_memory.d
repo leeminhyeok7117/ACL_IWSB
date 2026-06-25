@@ -57,7 +57,7 @@ gecko_sdk_4.5.0/platform/common/toolchain/src/sl_memory.o: \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/Device/SiliconLabs/EFR32FG12P/Include/efr32fg12p_af_pins.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/toolchain/inc/sl_memory.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/toolchain/inc/sl_memory_region.h \
- /home/lmh/SimplicityStudio/v5_workspace/cubesat_TX/config/sl_memory_config.h
+ /home/lmh/SimplicityStudio/v5_workspace/cubesat_TX_IWSB/config/sl_memory_config.h
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/toolchain/inc/sl_gcc_preinclude.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/Device/SiliconLabs/EFR32FG12P/Include/em_device.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/Device/SiliconLabs/EFR32FG12P/Include/efr32fg12p433f1024gl125.h:
@@ -115,4 +115,4 @@ gecko_sdk_4.5.0/platform/common/toolchain/src/sl_memory.o: \
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/Device/SiliconLabs/EFR32FG12P/Include/efr32fg12p_af_pins.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/toolchain/inc/sl_memory.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/toolchain/inc/sl_memory_region.h:
-/home/lmh/SimplicityStudio/v5_workspace/cubesat_TX/config/sl_memory_config.h:
+/home/lmh/SimplicityStudio/v5_workspace/cubesat_TX_IWSB/config/sl_memory_config.h:

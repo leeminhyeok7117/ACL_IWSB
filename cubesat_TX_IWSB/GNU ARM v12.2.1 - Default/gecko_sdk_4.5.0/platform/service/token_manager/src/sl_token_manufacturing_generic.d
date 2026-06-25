@@ -58,7 +58,7 @@ gecko_sdk_4.5.0/platform/service/token_manager/src/sl_token_manufacturing_generi
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/Device/SiliconLabs/EFR32FG12P/Include/efr32fg12p_dmareq.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/Device/SiliconLabs/EFR32FG12P/Include/efr32fg12p_af_ports.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/Device/SiliconLabs/EFR32FG12P/Include/efr32fg12p_af_pins.h \
- /home/lmh/SimplicityStudio/v5_workspace/cubesat_TX/config/sl_token_manager_config.h \
+ /home/lmh/SimplicityStudio/v5_workspace/cubesat_TX_IWSB/config/sl_token_manager_config.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/token_manager/inc/sl_token_manufacturing_series_1.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/token_manager/inc/sl_token_manufacturing_generic.h
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/toolchain/inc/sl_gcc_preinclude.h:
@@ -119,6 +119,6 @@ gecko_sdk_4.5.0/platform/service/token_manager/src/sl_token_manufacturing_generi
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/Device/SiliconLabs/EFR32FG12P/Include/efr32fg12p_dmareq.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/Device/SiliconLabs/EFR32FG12P/Include/efr32fg12p_af_ports.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/Device/SiliconLabs/EFR32FG12P/Include/efr32fg12p_af_pins.h:
-/home/lmh/SimplicityStudio/v5_workspace/cubesat_TX/config/sl_token_manager_config.h:
+/home/lmh/SimplicityStudio/v5_workspace/cubesat_TX_IWSB/config/sl_token_manager_config.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/token_manager/inc/sl_token_manufacturing_series_1.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/token_manager/inc/sl_token_manufacturing_generic.h:

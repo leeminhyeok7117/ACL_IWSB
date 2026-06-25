@@ -2,7 +2,7 @@ gecko_sdk_4.5.0/platform/service/power_manager/src/sl_power_manager.o: \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk/platform/service/power_manager/src/sl_power_manager.c \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/toolchain/inc/sl_gcc_preinclude.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/power_manager/inc/sl_power_manager.h \
- /home/lmh/SimplicityStudio/v5_workspace/cubesat_RX/config/sl_power_manager_config.h \
+ /home/lmh/SimplicityStudio/v5_workspace/cubesat_RX_IWSB/config/sl_power_manager_config.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_slist.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_status.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/sleeptimer/inc/sl_sleeptimer.h \
@@ -13,8 +13,8 @@ gecko_sdk_4.5.0/platform/service/power_manager/src/sl_power_manager.o: \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_enum.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_core_generic.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk/platform/service/power_manager/src/sli_power_manager_private.h \
- /home/lmh/SimplicityStudio/v5_workspace/cubesat_RX/autogen/sl_component_catalog.h \
- /home/lmh/SimplicityStudio/v5_workspace/cubesat_RX/config/emlib_core_debug_config.h \
+ /home/lmh/SimplicityStudio/v5_workspace/cubesat_RX_IWSB/autogen/sl_component_catalog.h \
+ /home/lmh/SimplicityStudio/v5_workspace/cubesat_RX_IWSB/config/emlib_core_debug_config.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/power_manager/inc/sli_power_manager.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/power_manager/inc/sl_power_manager.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/sleeptimer/inc/sli_sleeptimer.h \
@@ -71,7 +71,7 @@ gecko_sdk_4.5.0/platform/service/power_manager/src/sl_power_manager.o: \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/Device/SiliconLabs/EFR32FG12P/Include/efr32fg12p_dmareq.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/Device/SiliconLabs/EFR32FG12P/Include/efr32fg12p_af_ports.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/Device/SiliconLabs/EFR32FG12P/Include/efr32fg12p_af_pins.h \
- /home/lmh/SimplicityStudio/v5_workspace/cubesat_RX/config/sl_sleeptimer_config.h \
+ /home/lmh/SimplicityStudio/v5_workspace/cubesat_RX_IWSB/config/sl_sleeptimer_config.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_assert.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_atomic.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_emu.h \
@@ -80,7 +80,7 @@ gecko_sdk_4.5.0/platform/service/power_manager/src/sl_power_manager.o: \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_core_generic.h
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/toolchain/inc/sl_gcc_preinclude.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/power_manager/inc/sl_power_manager.h:
-/home/lmh/SimplicityStudio/v5_workspace/cubesat_RX/config/sl_power_manager_config.h:
+/home/lmh/SimplicityStudio/v5_workspace/cubesat_RX_IWSB/config/sl_power_manager_config.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_slist.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_status.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/sleeptimer/inc/sl_sleeptimer.h:
@@ -91,8 +91,8 @@ gecko_sdk_4.5.0/platform/service/power_manager/src/sl_power_manager.o: \
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_enum.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_core_generic.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk/platform/service/power_manager/src/sli_power_manager_private.h:
-/home/lmh/SimplicityStudio/v5_workspace/cubesat_RX/autogen/sl_component_catalog.h:
-/home/lmh/SimplicityStudio/v5_workspace/cubesat_RX/config/emlib_core_debug_config.h:
+/home/lmh/SimplicityStudio/v5_workspace/cubesat_RX_IWSB/autogen/sl_component_catalog.h:
+/home/lmh/SimplicityStudio/v5_workspace/cubesat_RX_IWSB/config/emlib_core_debug_config.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/power_manager/inc/sli_power_manager.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/power_manager/inc/sl_power_manager.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/sleeptimer/inc/sli_sleeptimer.h:
@@ -149,7 +149,7 @@ gecko_sdk_4.5.0/platform/service/power_manager/src/sl_power_manager.o: \
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/Device/SiliconLabs/EFR32FG12P/Include/efr32fg12p_dmareq.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/Device/SiliconLabs/EFR32FG12P/Include/efr32fg12p_af_ports.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/Device/SiliconLabs/EFR32FG12P/Include/efr32fg12p_af_pins.h:
-/home/lmh/SimplicityStudio/v5_workspace/cubesat_RX/config/sl_sleeptimer_config.h:
+/home/lmh/SimplicityStudio/v5_workspace/cubesat_RX_IWSB/config/sl_sleeptimer_config.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_assert.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_atomic.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_emu.h:

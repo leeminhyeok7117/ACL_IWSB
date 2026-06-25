@@ -3,7 +3,7 @@ autogen/sl_iostream_init_usart_instances.o: \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/toolchain/inc/sl_gcc_preinclude.h \
  ../autogen/sl_component_catalog.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/power_manager/inc/sl_power_manager.h \
- /home/lmh/SimplicityStudio/v5_workspace/cubesat_RX/config/sl_power_manager_config.h \
+ /home/lmh/SimplicityStudio/v5_workspace/cubesat_RX_IWSB/config/sl_power_manager_config.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_slist.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_status.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/sleeptimer/inc/sl_sleeptimer.h \
@@ -67,13 +67,13 @@ autogen/sl_iostream_init_usart_instances.o: \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/Device/SiliconLabs/EFR32FG12P/Include/efr32fg12p_af_ports.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/Device/SiliconLabs/EFR32FG12P/Include/efr32fg12p_af_pins.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/iostream/inc/sl_iostream.h \
- /home/lmh/SimplicityStudio/v5_workspace/cubesat_RX/autogen/sl_component_catalog.h \
+ /home/lmh/SimplicityStudio/v5_workspace/cubesat_RX_IWSB/autogen/sl_component_catalog.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/iostream/inc/sl_iostream_uart.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/iostream/inc/sl_iostream.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emdrv/dmadrv/inc/dmadrv.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emdrv/common/inc/ecode.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_ldma.h \
- /home/lmh/SimplicityStudio/v5_workspace/cubesat_RX/config/dmadrv_config.h \
+ /home/lmh/SimplicityStudio/v5_workspace/cubesat_RX_IWSB/config/dmadrv_config.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/iostream/inc/sl_iostream_usart.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/iostream/inc/sl_iostream_uart.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_cmu.h \
@@ -81,18 +81,18 @@ autogen/sl_iostream_init_usart_instances.o: \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_bus.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_core.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_core_generic.h \
- /home/lmh/SimplicityStudio/v5_workspace/cubesat_RX/config/emlib_core_debug_config.h \
+ /home/lmh/SimplicityStudio/v5_workspace/cubesat_RX_IWSB/config/emlib_core_debug_config.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_cmu_compat.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_gpio.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/sli_em_cmu.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_gpio.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_usart.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//hardware/driver/configuration_over_swo/inc/sl_cos.h \
- /home/lmh/SimplicityStudio/v5_workspace/cubesat_RX/config/sl_iostream_usart_vcom_config.h
+ /home/lmh/SimplicityStudio/v5_workspace/cubesat_RX_IWSB/config/sl_iostream_usart_vcom_config.h
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/toolchain/inc/sl_gcc_preinclude.h:
 ../autogen/sl_component_catalog.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/power_manager/inc/sl_power_manager.h:
-/home/lmh/SimplicityStudio/v5_workspace/cubesat_RX/config/sl_power_manager_config.h:
+/home/lmh/SimplicityStudio/v5_workspace/cubesat_RX_IWSB/config/sl_power_manager_config.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_slist.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_status.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/sleeptimer/inc/sl_sleeptimer.h:
@@ -156,13 +156,13 @@ autogen/sl_iostream_init_usart_instances.o: \
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/Device/SiliconLabs/EFR32FG12P/Include/efr32fg12p_af_ports.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/Device/SiliconLabs/EFR32FG12P/Include/efr32fg12p_af_pins.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/iostream/inc/sl_iostream.h:
-/home/lmh/SimplicityStudio/v5_workspace/cubesat_RX/autogen/sl_component_catalog.h:
+/home/lmh/SimplicityStudio/v5_workspace/cubesat_RX_IWSB/autogen/sl_component_catalog.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/iostream/inc/sl_iostream_uart.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/iostream/inc/sl_iostream.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emdrv/dmadrv/inc/dmadrv.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emdrv/common/inc/ecode.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_ldma.h:
-/home/lmh/SimplicityStudio/v5_workspace/cubesat_RX/config/dmadrv_config.h:
+/home/lmh/SimplicityStudio/v5_workspace/cubesat_RX_IWSB/config/dmadrv_config.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/iostream/inc/sl_iostream_usart.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/iostream/inc/sl_iostream_uart.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_cmu.h:
@@ -170,11 +170,11 @@ autogen/sl_iostream_init_usart_instances.o: \
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_bus.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_core.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_core_generic.h:
-/home/lmh/SimplicityStudio/v5_workspace/cubesat_RX/config/emlib_core_debug_config.h:
+/home/lmh/SimplicityStudio/v5_workspace/cubesat_RX_IWSB/config/emlib_core_debug_config.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_cmu_compat.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_gpio.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/sli_em_cmu.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_gpio.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_usart.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//hardware/driver/configuration_over_swo/inc/sl_cos.h:
-/home/lmh/SimplicityStudio/v5_workspace/cubesat_RX/config/sl_iostream_usart_vcom_config.h:
+/home/lmh/SimplicityStudio/v5_workspace/cubesat_RX_IWSB/config/sl_iostream_usart_vcom_config.h:

@@ -8,11 +8,11 @@ gecko_sdk_4.5.0/platform/service/token_manager/src/sl_token_manager.o: \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/CMSIS/Core/Include/cmsis_compiler.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/CMSIS/Core/Include/cmsis_gcc.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//protocol/flex/stack/config/ember-configuration-defaults.h \
- /home/lmh/SimplicityStudio/v5_workspace/cubesat_TX/autogen/sl_component_catalog.h \
- /home/lmh/SimplicityStudio/v5_workspace/cubesat_TX/config/stack-common-config.h \
- /home/lmh/SimplicityStudio/v5_workspace/cubesat_TX/config/frequency-hopping-config.h \
- /home/lmh/SimplicityStudio/v5_workspace/cubesat_TX/config/parent-support-config.h \
- /home/lmh/SimplicityStudio/v5_workspace/cubesat_TX/config/mac-queue-config.h \
+ /home/lmh/SimplicityStudio/v5_workspace/cubesat_TX_IWSB/autogen/sl_component_catalog.h \
+ /home/lmh/SimplicityStudio/v5_workspace/cubesat_TX_IWSB/config/stack-common-config.h \
+ /home/lmh/SimplicityStudio/v5_workspace/cubesat_TX_IWSB/config/frequency-hopping-config.h \
+ /home/lmh/SimplicityStudio/v5_workspace/cubesat_TX_IWSB/config/parent-support-config.h \
+ /home/lmh/SimplicityStudio/v5_workspace/cubesat_TX_IWSB/config/mac-queue-config.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/token_manager/inc/sl_token_manufacturing_api.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/token_manager/inc/sl_token_manufacturing.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/Device/SiliconLabs/EFR32FG12P/Include/em_device.h \
@@ -68,7 +68,7 @@ gecko_sdk_4.5.0/platform/service/token_manager/src/sl_token_manager.o: \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/Device/SiliconLabs/EFR32FG12P/Include/efr32fg12p_dmareq.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/Device/SiliconLabs/EFR32FG12P/Include/efr32fg12p_af_ports.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/Device/SiliconLabs/EFR32FG12P/Include/efr32fg12p_af_pins.h \
- /home/lmh/SimplicityStudio/v5_workspace/cubesat_TX/config/sl_token_manager_config.h \
+ /home/lmh/SimplicityStudio/v5_workspace/cubesat_TX_IWSB/config/sl_token_manager_config.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/token_manager/inc/sl_token_manufacturing_series_1.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/token_manager/inc/sl_token_manufacturing_generic.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//protocol/flex/stack/config/token-stack.h \
@@ -88,11 +88,11 @@ gecko_sdk_4.5.0/platform/service/token_manager/src/sl_token_manager.o: \
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/CMSIS/Core/Include/cmsis_compiler.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/CMSIS/Core/Include/cmsis_gcc.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//protocol/flex/stack/config/ember-configuration-defaults.h:
-/home/lmh/SimplicityStudio/v5_workspace/cubesat_TX/autogen/sl_component_catalog.h:
-/home/lmh/SimplicityStudio/v5_workspace/cubesat_TX/config/stack-common-config.h:
-/home/lmh/SimplicityStudio/v5_workspace/cubesat_TX/config/frequency-hopping-config.h:
-/home/lmh/SimplicityStudio/v5_workspace/cubesat_TX/config/parent-support-config.h:
-/home/lmh/SimplicityStudio/v5_workspace/cubesat_TX/config/mac-queue-config.h:
+/home/lmh/SimplicityStudio/v5_workspace/cubesat_TX_IWSB/autogen/sl_component_catalog.h:
+/home/lmh/SimplicityStudio/v5_workspace/cubesat_TX_IWSB/config/stack-common-config.h:
+/home/lmh/SimplicityStudio/v5_workspace/cubesat_TX_IWSB/config/frequency-hopping-config.h:
+/home/lmh/SimplicityStudio/v5_workspace/cubesat_TX_IWSB/config/parent-support-config.h:
+/home/lmh/SimplicityStudio/v5_workspace/cubesat_TX_IWSB/config/mac-queue-config.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/token_manager/inc/sl_token_manufacturing_api.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/token_manager/inc/sl_token_manufacturing.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/Device/SiliconLabs/EFR32FG12P/Include/em_device.h:
@@ -148,7 +148,7 @@ gecko_sdk_4.5.0/platform/service/token_manager/src/sl_token_manager.o: \
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/Device/SiliconLabs/EFR32FG12P/Include/efr32fg12p_dmareq.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/Device/SiliconLabs/EFR32FG12P/Include/efr32fg12p_af_ports.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/Device/SiliconLabs/EFR32FG12P/Include/efr32fg12p_af_pins.h:
-/home/lmh/SimplicityStudio/v5_workspace/cubesat_TX/config/sl_token_manager_config.h:
+/home/lmh/SimplicityStudio/v5_workspace/cubesat_TX_IWSB/config/sl_token_manager_config.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/token_manager/inc/sl_token_manufacturing_series_1.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/token_manager/inc/sl_token_manufacturing_generic.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//protocol/flex/stack/config/token-stack.h:

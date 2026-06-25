@@ -64,6 +64,31 @@ static const uint8_t g_eui64_map_count =
 #define MSG_TYPE_POLL_RESPONSE      0xB1U
 
 // ─────────────────────────────────────────────────────────────────────────────
+//  RSSI 측정 프로토콜 (주파수 호핑 기반 별 토폴로지) — TX/RX 동일 값 필수
+//
+//  TX(coordinator)가 (송신원 T, 채널 ch) 라운드를 오케스트레이션:
+//   1) MEAS_CMD 브로드캐스트 → 모든 노드가 ch 로 채널 전환
+//   2) 송신원 T 가 빈 비콘 N개 브로드캐스트 → 나머지 노드가 message->rssi 측정
+//   3) home 채널(0) 복귀 → 측정값을 MEAS_REPORT 로 TX 에 보고
+//   4) TX 가 외부 플래시에 저장
+//  ※ FH 컴포넌트는 포함됐으나 비활성(고정 ch0) → 앱이 직접 채널 스윕(안전).
+// ─────────────────────────────────────────────────────────────────────────────
+#define MSG_TYPE_MEAS_CMD           0xC0U  // TX→bcast : [1]seq [2]tx_id [3]ch [4]n_beacons
+#define MSG_TYPE_MEAS_BEACON        0xC1U  // T →bcast : [1]seq [2]tx_id [3]ch [4]beacon_idx
+#define MSG_TYPE_MEAS_REPORT        0xC2U  // listener→TX: [1]seq [2]tx_id [3]ch [4]rx_id [5]rssi [6]lqi [7]count
+
+#define MEAS_TX_DEVICE_ID           0x00U  // 프로토콜/레코드에서 TX 자신 (RX 는 1~4)
+#define MEAS_CH_FIRST               0U     // 스윕 시작 채널 (915.0 MHz)
+#define MEAS_CH_LAST                20U    // 스윕 끝 채널 (915MHz 채널플랜 0~20 = 915.0~923.0 MHz)
+#define MEAS_N_BEACONS              4U     // 라운드당 비콘 수
+#define MEAS_BEACON_SETUP_MS        60U    // cmd 수신→비콘 시작 대기(리스너 채널전환 여유)
+#define MEAS_BEACON_GAP_MS          15U    // 비콘 간 간격
+#define MEAS_SLOT_MS                250U   // 측정 슬롯 길이(이후 home 복귀)
+#define MEAS_REPORT_GAP_MS          40U    // 리포트 충돌 방지 스태거(device_id 당)
+#define MEAS_COLLECT_MS             500U   // (TX) 라운드별 리포트 수집 윈도
+#define MEAS_BAND_915               0x00U  // channel 바이트 bit7=0 → 915MHz
+
+// ─────────────────────────────────────────────────────────────────────────────
 //  펌웨어 버전 — OTA 업데이트 시 변경
 // ─────────────────────────────────────────────────────────────────────────────
 #define FW_VERSION_MAJOR    0x01U

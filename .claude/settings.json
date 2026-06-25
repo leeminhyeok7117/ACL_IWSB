@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(echo \"=== 과거 코드 경로 탐색 ===\"; ls -d /home/lmh/efr32fg12복사본/firmware1/ 2>/dev/null || ls -d /lmh/efr32fg12복사본/firmware1/ 2>/dev/null || find /home/lmh -maxdepth 3 -type d -iname \"firmware1\" 2>/dev/null | head; echo \"\"; echo \"=== 과거 firmware1 디렉토리 내용 ===\"; ls -R /home/lmh/efr32fg12복사본/firmware1/ 2>/dev/null | head -50)",
-      "Read(//lmh/efr32fg12복사본/**)"
+      "Read(//lmh/efr32fg12복사본/**)",
+      "Bash(cd /home/lmh/SimplicityStudio/v5_workspace/cubesat_TX_IWSB; grep -rhnE \"sl_cli_get_argument_\\(count|uint8|int16|uint16\\)\" app_cli.c | head; echo \"=== SDK에 get_argument_count 존재? ===\"; grep -rhnE \"sl_cli_get_argument_count\" /home/lmh/SimplicityStudio/SDKs/gecko_sdk/util/third_party/../*/cli/*.h 2>/dev/null | head; find /home/lmh/SimplicityStudio/SDKs/gecko_sdk -name \"sl_cli_arguments.h\" 2>/dev/null | head -1 | xargs grep -nE \"get_argument_count|get_argument_uint8\" 2>/dev/null)",
+      "Read(//home/lmh/SimplicityStudio/SDKs/gecko_sdk/util/*/cli/**)"
     ]
   }
 }

@@ -4,10 +4,10 @@ gecko_sdk_4.5.0/platform/security/sl_component/sl_mbedtls_support/src/sl_mbedtls
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/security/sl_component/sl_mbedtls_support/inc/sl_mbedtls.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_assert.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//util/third_party/mbedtls/include/mbedtls/build_info.h \
- /home/lmh/SimplicityStudio/v5_workspace/cubesat_RX/config/sl_mbedtls_config.h \
- /home/lmh/SimplicityStudio/v5_workspace/cubesat_RX/autogen/sli_mbedtls_config_autogen.h \
+ /home/lmh/SimplicityStudio/v5_workspace/cubesat_RX_IWSB/config/sl_mbedtls_config.h \
+ /home/lmh/SimplicityStudio/v5_workspace/cubesat_RX_IWSB/autogen/sli_mbedtls_config_autogen.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/security/sl_component/sl_mbedtls_support/config/sli_mbedtls_omnipresent.h \
- /home/lmh/SimplicityStudio/v5_workspace/cubesat_RX/autogen/sl_component_catalog.h \
+ /home/lmh/SimplicityStudio/v5_workspace/cubesat_RX_IWSB/autogen/sl_component_catalog.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/Device/SiliconLabs/EFR32FG12P/Include/em_device.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/Device/SiliconLabs/EFR32FG12P/Include/efr32fg12p433f1024gl125.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/CMSIS/Core/Include/core_cm4.h \
@@ -63,12 +63,12 @@ gecko_sdk_4.5.0/platform/security/sl_component/sl_mbedtls_support/src/sl_mbedtls
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/Device/SiliconLabs/EFR32FG12P/Include/efr32fg12p_af_ports.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/Device/SiliconLabs/EFR32FG12P/Include/efr32fg12p_af_pins.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/security/sl_component/sl_mbedtls_support/config/sli_mbedtls_acceleration.h \
- /home/lmh/SimplicityStudio/v5_workspace/cubesat_RX/config/sl_mbedtls_device_config.h \
- /home/lmh/SimplicityStudio/v5_workspace/cubesat_RX/autogen/sli_mbedtls_config_transform_autogen.h \
- /home/lmh/SimplicityStudio/v5_workspace/cubesat_RX/config/psa_crypto_config.h \
- /home/lmh/SimplicityStudio/v5_workspace/cubesat_RX/autogen/sli_psa_config_autogen.h \
+ /home/lmh/SimplicityStudio/v5_workspace/cubesat_RX_IWSB/config/sl_mbedtls_device_config.h \
+ /home/lmh/SimplicityStudio/v5_workspace/cubesat_RX_IWSB/autogen/sli_mbedtls_config_transform_autogen.h \
+ /home/lmh/SimplicityStudio/v5_workspace/cubesat_RX_IWSB/config/psa_crypto_config.h \
+ /home/lmh/SimplicityStudio/v5_workspace/cubesat_RX_IWSB/autogen/sli_psa_config_autogen.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/security/sl_component/sl_mbedtls_support/config/sli_psa_acceleration.h \
- /home/lmh/SimplicityStudio/v5_workspace/cubesat_RX/autogen/sli_psa_builtin_config_autogen.h \
+ /home/lmh/SimplicityStudio/v5_workspace/cubesat_RX_IWSB/autogen/sli_psa_builtin_config_autogen.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//util/third_party/mbedtls/include/mbedtls/config_psa.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//util/third_party/mbedtls/include/psa/crypto_legacy.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//util/third_party/mbedtls/include/psa/crypto_adjust_config_synonyms.h \
@@ -84,10 +84,10 @@ gecko_sdk_4.5.0/platform/security/sl_component/sl_mbedtls_support/src/sl_mbedtls
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/security/sl_component/sl_mbedtls_support/inc/sl_mbedtls.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_assert.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//util/third_party/mbedtls/include/mbedtls/build_info.h:
-/home/lmh/SimplicityStudio/v5_workspace/cubesat_RX/config/sl_mbedtls_config.h:
-/home/lmh/SimplicityStudio/v5_workspace/cubesat_RX/autogen/sli_mbedtls_config_autogen.h:
+/home/lmh/SimplicityStudio/v5_workspace/cubesat_RX_IWSB/config/sl_mbedtls_config.h:
+/home/lmh/SimplicityStudio/v5_workspace/cubesat_RX_IWSB/autogen/sli_mbedtls_config_autogen.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/security/sl_component/sl_mbedtls_support/config/sli_mbedtls_omnipresent.h:
-/home/lmh/SimplicityStudio/v5_workspace/cubesat_RX/autogen/sl_component_catalog.h:
+/home/lmh/SimplicityStudio/v5_workspace/cubesat_RX_IWSB/autogen/sl_component_catalog.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/Device/SiliconLabs/EFR32FG12P/Include/em_device.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/Device/SiliconLabs/EFR32FG12P/Include/efr32fg12p433f1024gl125.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/CMSIS/Core/Include/core_cm4.h:
@@ -143,12 +143,12 @@ gecko_sdk_4.5.0/platform/security/sl_component/sl_mbedtls_support/src/sl_mbedtls
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/Device/SiliconLabs/EFR32FG12P/Include/efr32fg12p_af_ports.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/Device/SiliconLabs/EFR32FG12P/Include/efr32fg12p_af_pins.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/security/sl_component/sl_mbedtls_support/config/sli_mbedtls_acceleration.h:
-/home/lmh/SimplicityStudio/v5_workspace/cubesat_RX/config/sl_mbedtls_device_config.h:
-/home/lmh/SimplicityStudio/v5_workspace/cubesat_RX/autogen/sli_mbedtls_config_transform_autogen.h:
-/home/lmh/SimplicityStudio/v5_workspace/cubesat_RX/config/psa_crypto_config.h:
-/home/lmh/SimplicityStudio/v5_workspace/cubesat_RX/autogen/sli_psa_config_autogen.h:
+/home/lmh/SimplicityStudio/v5_workspace/cubesat_RX_IWSB/config/sl_mbedtls_device_config.h:
+/home/lmh/SimplicityStudio/v5_workspace/cubesat_RX_IWSB/autogen/sli_mbedtls_config_transform_autogen.h:
+/home/lmh/SimplicityStudio/v5_workspace/cubesat_RX_IWSB/config/psa_crypto_config.h:
+/home/lmh/SimplicityStudio/v5_workspace/cubesat_RX_IWSB/autogen/sli_psa_config_autogen.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/security/sl_component/sl_mbedtls_support/config/sli_psa_acceleration.h:
-/home/lmh/SimplicityStudio/v5_workspace/cubesat_RX/autogen/sli_psa_builtin_config_autogen.h:
+/home/lmh/SimplicityStudio/v5_workspace/cubesat_RX_IWSB/autogen/sli_psa_builtin_config_autogen.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//util/third_party/mbedtls/include/mbedtls/config_psa.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//util/third_party/mbedtls/include/psa/crypto_legacy.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//util/third_party/mbedtls/include/psa/crypto_adjust_config_synonyms.h:

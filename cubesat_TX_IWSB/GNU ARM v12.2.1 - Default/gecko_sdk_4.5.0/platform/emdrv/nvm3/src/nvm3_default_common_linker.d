@@ -64,7 +64,7 @@ gecko_sdk_4.5.0/platform/emdrv/nvm3/src/nvm3_default_common_linker.o: \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_assert.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emdrv/nvm3/inc/nvm3_default.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emdrv/nvm3/inc/nvm3_hal_flash.h \
- /home/lmh/SimplicityStudio/v5_workspace/cubesat_TX/config/nvm3_default_config.h
+ /home/lmh/SimplicityStudio/v5_workspace/cubesat_TX_IWSB/config/nvm3_default_config.h
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/toolchain/inc/sl_gcc_preinclude.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emdrv/nvm3/inc/nvm3.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/Device/SiliconLabs/EFR32FG12P/Include/em_device.h:
@@ -129,4 +129,4 @@ gecko_sdk_4.5.0/platform/emdrv/nvm3/src/nvm3_default_common_linker.o: \
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_assert.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emdrv/nvm3/inc/nvm3_default.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emdrv/nvm3/inc/nvm3_hal_flash.h:
-/home/lmh/SimplicityStudio/v5_workspace/cubesat_TX/config/nvm3_default_config.h:
+/home/lmh/SimplicityStudio/v5_workspace/cubesat_TX_IWSB/config/nvm3_default_config.h:

@@ -172,6 +172,24 @@ template_contribution:
     - {type: uint16, help: Short Address of the child to remove. Not used if long
         address is given}
     - {type: hexopt, help: Long Address of the child to remove}
+- name: cli_command
+  priority: 0
+  value: {name: meas, handler: cli_meas_start, help: 'Start one RSSI measurement
+      campaign (frequency-hopping sweep)'}
+- name: cli_command
+  priority: 0
+  value: {name: meas_stat, handler: cli_meas_stat, help: 'Print RSSI log status/record count'}
+- name: cli_command
+  priority: 0
+  value: {name: meas_clear, handler: cli_meas_clear, help: 'Clear the RSSI log (reset cursor)'}
+- name: cli_command
+  priority: 0
+  value:
+    name: meas_auto
+    handler: cli_meas_auto
+    help: 'Enable/disable periodic auto sweep (arg 0/1; no arg = show state)'
+    argument:
+    - {type: uint8opt, help: '1=enable periodic sweep, 0=disable'}
 requires:
 - {name: a_radio_config}
 configuration:

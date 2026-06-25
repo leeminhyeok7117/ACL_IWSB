@@ -1,10 +1,10 @@
 gecko_sdk_4.5.0/hardware/driver/configuration_over_swo/src/sl_cos.o: \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk/hardware/driver/configuration_over_swo/src/sl_cos.c \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/toolchain/inc/sl_gcc_preinclude.h \
- /home/lmh/SimplicityStudio/v5_workspace/cubesat_RX/autogen/sl_component_catalog.h \
+ /home/lmh/SimplicityStudio/v5_workspace/cubesat_RX_IWSB/autogen/sl_component_catalog.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//hardware/driver/configuration_over_swo/inc/sl_cos.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_enum.h \
- /home/lmh/SimplicityStudio/v5_workspace/cubesat_RX/config/sl_rail_util_pti_config.h \
+ /home/lmh/SimplicityStudio/v5_workspace/cubesat_RX_IWSB/config/sl_rail_util_pti_config.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/radio/rail_lib/common/rail_types.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/radio/rail_lib/chip/efr32/efr32xg1x/rail_chip_specific.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/radio/rail_lib/common/rail_features.h \
@@ -67,10 +67,10 @@ gecko_sdk_4.5.0/hardware/driver/configuration_over_swo/src/sl_cos.o: \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_assert.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/driver/debug/inc/sl_debug_swo.h
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/toolchain/inc/sl_gcc_preinclude.h:
-/home/lmh/SimplicityStudio/v5_workspace/cubesat_RX/autogen/sl_component_catalog.h:
+/home/lmh/SimplicityStudio/v5_workspace/cubesat_RX_IWSB/autogen/sl_component_catalog.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//hardware/driver/configuration_over_swo/inc/sl_cos.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_enum.h:
-/home/lmh/SimplicityStudio/v5_workspace/cubesat_RX/config/sl_rail_util_pti_config.h:
+/home/lmh/SimplicityStudio/v5_workspace/cubesat_RX_IWSB/config/sl_rail_util_pti_config.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/radio/rail_lib/common/rail_types.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/radio/rail_lib/chip/efr32/efr32xg1x/rail_chip_specific.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/radio/rail_lib/common/rail_features.h:

@@ -1,9 +1,9 @@
 main.o: ../main.c \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/toolchain/inc/sl_gcc_preinclude.h \
- /home/lmh/SimplicityStudio/v5_workspace/cubesat_TX/autogen/sl_component_catalog.h \
+ /home/lmh/SimplicityStudio/v5_workspace/cubesat_TX_IWSB/autogen/sl_component_catalog.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/system/inc/sl_system_init.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/power_manager/inc/sl_power_manager.h \
- /home/lmh/SimplicityStudio/v5_workspace/cubesat_TX/config/sl_power_manager_config.h \
+ /home/lmh/SimplicityStudio/v5_workspace/cubesat_TX_IWSB/config/sl_power_manager_config.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_slist.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_status.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/sleeptimer/inc/sl_sleeptimer.h \
@@ -17,10 +17,10 @@ main.o: ../main.c \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//protocol/flex/stack/include/ember.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//protocol/flex/stack/include/ember-types.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//protocol/flex/stack/config/ember-configuration-defaults.h \
- /home/lmh/SimplicityStudio/v5_workspace/cubesat_TX/config/stack-common-config.h \
- /home/lmh/SimplicityStudio/v5_workspace/cubesat_TX/config/frequency-hopping-config.h \
- /home/lmh/SimplicityStudio/v5_workspace/cubesat_TX/config/parent-support-config.h \
- /home/lmh/SimplicityStudio/v5_workspace/cubesat_TX/config/mac-queue-config.h \
+ /home/lmh/SimplicityStudio/v5_workspace/cubesat_TX_IWSB/config/stack-common-config.h \
+ /home/lmh/SimplicityStudio/v5_workspace/cubesat_TX_IWSB/config/frequency-hopping-config.h \
+ /home/lmh/SimplicityStudio/v5_workspace/cubesat_TX_IWSB/config/parent-support-config.h \
+ /home/lmh/SimplicityStudio/v5_workspace/cubesat_TX_IWSB/config/mac-queue-config.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//protocol/flex/stack/include/error.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//protocol/flex/stack/include/error-def.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//protocol/flex/stack/include/memory-buffer.h \
@@ -32,8 +32,8 @@ main.o: ../main.c \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//util/third_party/mbedtls/include/mbedtls/private_access.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//util/third_party/mbedtls/include/psa/build_info.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//util/third_party/mbedtls/include/mbedtls/build_info.h \
- /home/lmh/SimplicityStudio/v5_workspace/cubesat_TX/config/sl_mbedtls_config.h \
- /home/lmh/SimplicityStudio/v5_workspace/cubesat_TX/autogen/sli_mbedtls_config_autogen.h \
+ /home/lmh/SimplicityStudio/v5_workspace/cubesat_TX_IWSB/config/sl_mbedtls_config.h \
+ /home/lmh/SimplicityStudio/v5_workspace/cubesat_TX_IWSB/autogen/sli_mbedtls_config_autogen.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/security/sl_component/sl_mbedtls_support/config/sli_mbedtls_omnipresent.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/Device/SiliconLabs/EFR32FG12P/Include/em_device.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/Device/SiliconLabs/EFR32FG12P/Include/efr32fg12p433f1024gl125.h \
@@ -89,12 +89,12 @@ main.o: ../main.c \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/Device/SiliconLabs/EFR32FG12P/Include/efr32fg12p_af_ports.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/Device/SiliconLabs/EFR32FG12P/Include/efr32fg12p_af_pins.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/security/sl_component/sl_mbedtls_support/config/sli_mbedtls_acceleration.h \
- /home/lmh/SimplicityStudio/v5_workspace/cubesat_TX/config/sl_mbedtls_device_config.h \
- /home/lmh/SimplicityStudio/v5_workspace/cubesat_TX/autogen/sli_mbedtls_config_transform_autogen.h \
- /home/lmh/SimplicityStudio/v5_workspace/cubesat_TX/config/psa_crypto_config.h \
- /home/lmh/SimplicityStudio/v5_workspace/cubesat_TX/autogen/sli_psa_config_autogen.h \
+ /home/lmh/SimplicityStudio/v5_workspace/cubesat_TX_IWSB/config/sl_mbedtls_device_config.h \
+ /home/lmh/SimplicityStudio/v5_workspace/cubesat_TX_IWSB/autogen/sli_mbedtls_config_transform_autogen.h \
+ /home/lmh/SimplicityStudio/v5_workspace/cubesat_TX_IWSB/config/psa_crypto_config.h \
+ /home/lmh/SimplicityStudio/v5_workspace/cubesat_TX_IWSB/autogen/sli_psa_config_autogen.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/security/sl_component/sl_mbedtls_support/config/sli_psa_acceleration.h \
- /home/lmh/SimplicityStudio/v5_workspace/cubesat_TX/autogen/sli_psa_builtin_config_autogen.h \
+ /home/lmh/SimplicityStudio/v5_workspace/cubesat_TX_IWSB/autogen/sli_psa_builtin_config_autogen.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//util/third_party/mbedtls/include/mbedtls/config_psa.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//util/third_party/mbedtls/include/psa/crypto_legacy.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//util/third_party/mbedtls/include/psa/crypto_adjust_config_synonyms.h \
@@ -124,7 +124,7 @@ main.o: ../main.c \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_assert.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_core.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_core_generic.h \
- /home/lmh/SimplicityStudio/v5_workspace/cubesat_TX/config/emlib_core_debug_config.h \
+ /home/lmh/SimplicityStudio/v5_workspace/cubesat_TX_IWSB/config/emlib_core_debug_config.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_crypto_compat.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//util/third_party/mbedtls/include/mbedtls/sha256.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/security/sl_component/sl_mbedtls_support/inc/sha256_alt.h \
@@ -157,10 +157,10 @@ main.o: ../main.c \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//protocol/flex/stack/include/radio-stream.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/system/inc/sl_system_process_action.h
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/toolchain/inc/sl_gcc_preinclude.h:
-/home/lmh/SimplicityStudio/v5_workspace/cubesat_TX/autogen/sl_component_catalog.h:
+/home/lmh/SimplicityStudio/v5_workspace/cubesat_TX_IWSB/autogen/sl_component_catalog.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/system/inc/sl_system_init.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/power_manager/inc/sl_power_manager.h:
-/home/lmh/SimplicityStudio/v5_workspace/cubesat_TX/config/sl_power_manager_config.h:
+/home/lmh/SimplicityStudio/v5_workspace/cubesat_TX_IWSB/config/sl_power_manager_config.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_slist.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_status.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/sleeptimer/inc/sl_sleeptimer.h:
@@ -175,10 +175,10 @@ main.o: ../main.c \
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//protocol/flex/stack/include/ember.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//protocol/flex/stack/include/ember-types.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//protocol/flex/stack/config/ember-configuration-defaults.h:
-/home/lmh/SimplicityStudio/v5_workspace/cubesat_TX/config/stack-common-config.h:
-/home/lmh/SimplicityStudio/v5_workspace/cubesat_TX/config/frequency-hopping-config.h:
-/home/lmh/SimplicityStudio/v5_workspace/cubesat_TX/config/parent-support-config.h:
-/home/lmh/SimplicityStudio/v5_workspace/cubesat_TX/config/mac-queue-config.h:
+/home/lmh/SimplicityStudio/v5_workspace/cubesat_TX_IWSB/config/stack-common-config.h:
+/home/lmh/SimplicityStudio/v5_workspace/cubesat_TX_IWSB/config/frequency-hopping-config.h:
+/home/lmh/SimplicityStudio/v5_workspace/cubesat_TX_IWSB/config/parent-support-config.h:
+/home/lmh/SimplicityStudio/v5_workspace/cubesat_TX_IWSB/config/mac-queue-config.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//protocol/flex/stack/include/error.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//protocol/flex/stack/include/error-def.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//protocol/flex/stack/include/memory-buffer.h:
@@ -190,8 +190,8 @@ main.o: ../main.c \
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//util/third_party/mbedtls/include/mbedtls/private_access.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//util/third_party/mbedtls/include/psa/build_info.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//util/third_party/mbedtls/include/mbedtls/build_info.h:
-/home/lmh/SimplicityStudio/v5_workspace/cubesat_TX/config/sl_mbedtls_config.h:
-/home/lmh/SimplicityStudio/v5_workspace/cubesat_TX/autogen/sli_mbedtls_config_autogen.h:
+/home/lmh/SimplicityStudio/v5_workspace/cubesat_TX_IWSB/config/sl_mbedtls_config.h:
+/home/lmh/SimplicityStudio/v5_workspace/cubesat_TX_IWSB/autogen/sli_mbedtls_config_autogen.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/security/sl_component/sl_mbedtls_support/config/sli_mbedtls_omnipresent.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/Device/SiliconLabs/EFR32FG12P/Include/em_device.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/Device/SiliconLabs/EFR32FG12P/Include/efr32fg12p433f1024gl125.h:
@@ -247,12 +247,12 @@ main.o: ../main.c \
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/Device/SiliconLabs/EFR32FG12P/Include/efr32fg12p_af_ports.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/Device/SiliconLabs/EFR32FG12P/Include/efr32fg12p_af_pins.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/security/sl_component/sl_mbedtls_support/config/sli_mbedtls_acceleration.h:
-/home/lmh/SimplicityStudio/v5_workspace/cubesat_TX/config/sl_mbedtls_device_config.h:
-/home/lmh/SimplicityStudio/v5_workspace/cubesat_TX/autogen/sli_mbedtls_config_transform_autogen.h:
-/home/lmh/SimplicityStudio/v5_workspace/cubesat_TX/config/psa_crypto_config.h:
-/home/lmh/SimplicityStudio/v5_workspace/cubesat_TX/autogen/sli_psa_config_autogen.h:
+/home/lmh/SimplicityStudio/v5_workspace/cubesat_TX_IWSB/config/sl_mbedtls_device_config.h:
+/home/lmh/SimplicityStudio/v5_workspace/cubesat_TX_IWSB/autogen/sli_mbedtls_config_transform_autogen.h:
+/home/lmh/SimplicityStudio/v5_workspace/cubesat_TX_IWSB/config/psa_crypto_config.h:
+/home/lmh/SimplicityStudio/v5_workspace/cubesat_TX_IWSB/autogen/sli_psa_config_autogen.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/security/sl_component/sl_mbedtls_support/config/sli_psa_acceleration.h:
-/home/lmh/SimplicityStudio/v5_workspace/cubesat_TX/autogen/sli_psa_builtin_config_autogen.h:
+/home/lmh/SimplicityStudio/v5_workspace/cubesat_TX_IWSB/autogen/sli_psa_builtin_config_autogen.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//util/third_party/mbedtls/include/mbedtls/config_psa.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//util/third_party/mbedtls/include/psa/crypto_legacy.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//util/third_party/mbedtls/include/psa/crypto_adjust_config_synonyms.h:
@@ -282,7 +282,7 @@ main.o: ../main.c \
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_assert.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_core.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_core_generic.h:
-/home/lmh/SimplicityStudio/v5_workspace/cubesat_TX/config/emlib_core_debug_config.h:
+/home/lmh/SimplicityStudio/v5_workspace/cubesat_TX_IWSB/config/emlib_core_debug_config.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_crypto_compat.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//util/third_party/mbedtls/include/mbedtls/sha256.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/security/sl_component/sl_mbedtls_support/inc/sha256_alt.h:

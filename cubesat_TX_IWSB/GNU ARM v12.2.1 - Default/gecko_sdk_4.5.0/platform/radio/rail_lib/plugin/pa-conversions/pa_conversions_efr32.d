@@ -62,8 +62,8 @@ gecko_sdk_4.5.0/platform/radio/rail_lib/plugin/pa-conversions/pa_conversions_efr
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_core_generic.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_common.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_assert.h \
- /home/lmh/SimplicityStudio/v5_workspace/cubesat_TX/autogen/sl_component_catalog.h \
- /home/lmh/SimplicityStudio/v5_workspace/cubesat_TX/config/emlib_core_debug_config.h \
+ /home/lmh/SimplicityStudio/v5_workspace/cubesat_TX_IWSB/autogen/sl_component_catalog.h \
+ /home/lmh/SimplicityStudio/v5_workspace/cubesat_TX_IWSB/config/emlib_core_debug_config.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_cmu_compat.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_gpio.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_enum.h \
@@ -73,7 +73,7 @@ gecko_sdk_4.5.0/platform/radio/rail_lib/plugin/pa-conversions/pa_conversions_efr
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/radio/rail_lib/common/rail_types.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/radio/rail_lib/chip/efr32/efr32xg1x/rail_chip_specific.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/radio/rail_lib/common/rail_features.h \
- /home/lmh/SimplicityStudio/v5_workspace/cubesat_TX/config/sl_rail_util_pa_config.h \
+ /home/lmh/SimplicityStudio/v5_workspace/cubesat_TX_IWSB/config/sl_rail_util_pa_config.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk/platform/radio/rail_lib/plugin/pa-conversions/pa_curves_efr32.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk/platform/radio/rail_lib/plugin/pa-conversions/efr32xg1x/sl_rail_util_pa_curves.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk/platform/radio/rail_lib/plugin/pa-conversions/pa_curve_types_efr32.h \
@@ -142,8 +142,8 @@ gecko_sdk_4.5.0/platform/radio/rail_lib/plugin/pa-conversions/pa_conversions_efr
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_core_generic.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_common.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_assert.h:
-/home/lmh/SimplicityStudio/v5_workspace/cubesat_TX/autogen/sl_component_catalog.h:
-/home/lmh/SimplicityStudio/v5_workspace/cubesat_TX/config/emlib_core_debug_config.h:
+/home/lmh/SimplicityStudio/v5_workspace/cubesat_TX_IWSB/autogen/sl_component_catalog.h:
+/home/lmh/SimplicityStudio/v5_workspace/cubesat_TX_IWSB/config/emlib_core_debug_config.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_cmu_compat.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_gpio.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_enum.h:
@@ -153,7 +153,7 @@ gecko_sdk_4.5.0/platform/radio/rail_lib/plugin/pa-conversions/pa_conversions_efr
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/radio/rail_lib/common/rail_types.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/radio/rail_lib/chip/efr32/efr32xg1x/rail_chip_specific.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/radio/rail_lib/common/rail_features.h:
-/home/lmh/SimplicityStudio/v5_workspace/cubesat_TX/config/sl_rail_util_pa_config.h:
+/home/lmh/SimplicityStudio/v5_workspace/cubesat_TX_IWSB/config/sl_rail_util_pa_config.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk/platform/radio/rail_lib/plugin/pa-conversions/pa_curves_efr32.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk/platform/radio/rail_lib/plugin/pa-conversions/efr32xg1x/sl_rail_util_pa_curves.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk/platform/radio/rail_lib/plugin/pa-conversions/pa_curve_types_efr32.h:
