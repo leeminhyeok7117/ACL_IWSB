@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(echo \"=== 과거 코드 경로 탐색 ===\"; ls -d /home/lmh/efr32fg12복사본/firmware1/ 2>/dev/null || ls -d /lmh/efr32fg12복사본/firmware1/ 2>/dev/null || find /home/lmh -maxdepth 3 -type d -iname \"firmware1\" 2>/dev/null | head; echo \"\"; echo \"=== 과거 firmware1 디렉토리 내용 ===\"; ls -R /home/lmh/efr32fg12복사본/firmware1/ 2>/dev/null | head -50)",
+      "Read(//lmh/efr32fg12복사본/**)"
+    ]
+  }
+}

@@ -1,0 +1,7 @@
+---
+workspace_name: "connect_soc_sensor"
+label: "connect_soc_sensor"
+project:
+- id: "main"
+  path: "cubesat_RX.slcp"
+  output: "."

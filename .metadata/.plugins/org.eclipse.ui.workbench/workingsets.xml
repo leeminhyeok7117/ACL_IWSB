@@ -1,16 +1,25 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <workingSetManager>
-<workingSet editPageId="com.silabs.ss.framework.ide.project.ui.solution" factoryID="org.eclipse.ui.internal.WorkingSetFactory" id="1777377023982_5" label="connect_soc_sink" name="connect_soc_sink">
+<workingSet editPageId="com.silabs.ss.framework.ide.project.ui.solution" factoryID="org.eclipse.ui.internal.WorkingSetFactory" id="1782363317607_9" label="OTA" name="OTA">
+<item factoryID="org.eclipse.ui.internal.model.ResourceFactory" path="/bootloader-storage-spiflash-sfdp-single" type="4"/>
+<item factoryID="org.eclipse.ui.internal.model.ResourceFactory" path="/cubesat_RX" type="4"/>
 <item factoryID="org.eclipse.ui.internal.model.ResourceFactory" path="/cubesat_TX" type="4"/>
 </workingSet>
-<workingSet editPageId="com.silabs.ss.framework.ide.project.ui.solution" factoryID="org.eclipse.ui.internal.WorkingSetFactory" id="1777377072877_8" label="connect_soc_sensor" name="connect_soc_sensor">
-<item factoryID="org.eclipse.ui.internal.model.ResourceFactory" path="/cubesat_RX" type="4"/>
+<workingSet editPageId="com.silabs.ss.framework.ide.project.ui.solution" factoryID="org.eclipse.ui.internal.WorkingSetFactory" id="1782363403662_11" label="SDR" name="SDR">
+<item factoryID="org.eclipse.ui.internal.model.ResourceFactory" path="/sdr_test" type="4"/>
+</workingSet>
+<workingSet editPageId="com.silabs.ss.framework.ide.project.ui.solution" factoryID="org.eclipse.ui.internal.WorkingSetFactory" id="1782364170206_9" label="IWSB" name="IWSB">
+<item factoryID="org.eclipse.ui.internal.model.ResourceFactory" path="/bootloader-storage-spiflash-sfdp-single" type="4"/>
+<item factoryID="org.eclipse.ui.internal.model.ResourceFactory" path="/cubesat_RX_IWSB" type="4"/>
+<item factoryID="org.eclipse.ui.internal.model.ResourceFactory" path="/cubesat_TX_IWSB" type="4"/>
 </workingSet>
 <workingSet aggregate="true" factoryID="org.eclipse.ui.internal.WorkingSetFactory" id="1777102548486_0" label="Window Working Set" name="Aggregate for window 1777102548486"/>
 <workingSet aggregate="true" factoryID="org.eclipse.ui.internal.WorkingSetFactory" id="1777122935485_2" label="Window Working Set" name="Aggregate for window 1777122935485"/>
-<workingSet aggregate="true" factoryID="org.eclipse.ui.internal.WorkingSetFactory" id="1778872363304_7" label="Solutions" name="Solutions">
-<workingSet IMemento.internal.id="connect_soc_sensor"/>
-<workingSet IMemento.internal.id="connect_soc_sink"/>
-</workingSet>
 <workingSet aggregate="true" factoryID="org.eclipse.ui.internal.WorkingSetFactory" id="1778874827582_5" label="Window Working Set" name="Aggregate for window 1778874827581"/>
+<workingSet aggregate="true" factoryID="org.eclipse.ui.internal.WorkingSetFactory" id="1780916204679_7" label="Window Working Set" name="Aggregate for window 1780916204676"/>
+<workingSet aggregate="true" factoryID="org.eclipse.ui.internal.WorkingSetFactory" id="1782364170287_10" label="Solutions" name="Solutions">
+<workingSet IMemento.internal.id="IWSB"/>
+<workingSet IMemento.internal.id="OTA"/>
+<workingSet IMemento.internal.id="SDR"/>
+</workingSet>
 </workingSetManager>

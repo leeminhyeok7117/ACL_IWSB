@@ -1,0 +1,79 @@
+#include "sl_rail_util_init.h"
+#include "em_i2c.h"
+#include "em_cmu.h"
+#include "em_gpio.h"
+#include "app_log.h"
+#include "btl_interface.h"
+#include "sl_i2cslave_config.h"
+#include "sl_board_control.h"
+#include "rail.h"
+
+#define TX_FIFO_SIZE   64
+static SL_ALIGN(RAIL_FIFO_ALIGNMENT)
+  uint8_t tx_fifo[TX_FIFO_SIZE] SL_ATTRIBUTE_ALIGN(RAIL_FIFO_ALIGNMENT);
+
+RAIL_Handle_t app_init(void)
+{
+    RAIL_Handle_t rail_handle =
+        sl_rail_util_get_handle(SL_RAIL_UTIL_HANDLE_INST0);
+
+    sl_board_enable_vcom();
+
+    // GPIO, I2C 클럭 활성화
+    CMU_ClockEnable(cmuClock_GPIO, true);
+    CMU_ClockEnable(cmuClock_I2C0, true);
+
+    // PC10 (SDA), PC11 (SCL) 핀 설정
+    GPIO_PinModeSet(gpioPortC, 10, gpioModeWiredAndPullUpFilter, 1);
+    GPIO_PinModeSet(gpioPortC, 11, gpioModeWiredAndPullUpFilter, 1);
+
+    // I2C 라우팅 설정
+    I2C0->ROUTEPEN = I2C_ROUTEPEN_SDAPEN | I2C_ROUTEPEN_SCLPEN;
+    I2C0->ROUTELOC0 = (I2C0->ROUTELOC0 & (~_I2C_ROUTELOC0_SDALOC_MASK))
+                    | I2C_ROUTELOC0_SDALOC_LOC16;
+    I2C0->ROUTELOC0 = (I2C0->ROUTELOC0 & (~_I2C_ROUTELOC0_SCLLOC_MASK))
+                    | I2C_ROUTELOC0_SCLLOC_LOC14;
+
+    // I2C Slave 초기화
+    I2C_Init_TypeDef i2cInit = I2C_INIT_DEFAULT;
+    i2cInit.master = false;
+    i2cInit.freq = I2C_FREQ_STANDARD_MAX;
+    I2C_Init(I2C0, &i2cInit);
+
+    // Slave 주소 설정
+    I2C0->SADDR = I2C_SLAVE_ADDRESS;
+    I2C0->SADDRMASK = 0xFE;
+
+    // Slave 모드 설정
+    I2C0->CTRL |= I2C_CTRL_SLAVE | I2C_CTRL_AUTOSN;
+
+    // 인터럽트 활성화
+    I2C_IntClear(I2C0, I2C_IFC_ADDR | I2C_IF_RXDATAV | I2C_IFC_SSTOP);
+    I2C_IntEnable(I2C0, I2C_IEN_ADDR | I2C_IEN_RXDATAV | I2C_IEN_TXBL | I2C_IEN_NACK |I2C_IEN_SSTOP);
+    NVIC_EnableIRQ(I2C0_IRQn);
+
+    // 부트로더 초기화
+    bootloader_init();
+
+    // app_init.c, bootloader_init() 뒤에 추가
+    BootloaderStorageSlot_t slotInfo;
+    bootloader_getStorageSlotInfo(0, &slotInfo);
+    app_log_info("Slot 0: address=0x%08lX, length=%lu\r\n",
+                (unsigned long)slotInfo.address, (unsigned long)slotInfo.length);
+
+    BootloaderStorageInformation_t storageInfo;
+    bootloader_getStorageInfo(&storageInfo);
+    if (storageInfo.info != NULL) {
+        app_log_info("Storage type: %lu (0=SPIFLASH, 1=INTERNAL, 2=CUSTOM)\r\n",
+                    (unsigned long)storageInfo.info->partType);
+        app_log_info("pageSize=%lu partSize=%lu\r\n",
+                    (unsigned long)storageInfo.info->pageSize,
+                    (unsigned long)storageInfo.info->partSize);
+    }
+
+    app_log_info("Version 1.0 Init Done\r\n");
+
+    RAIL_SetTxFifo(rail_handle, tx_fifo, 0, TX_FIFO_SIZE); //TX fifo설정
+
+    return rail_handle;
+}

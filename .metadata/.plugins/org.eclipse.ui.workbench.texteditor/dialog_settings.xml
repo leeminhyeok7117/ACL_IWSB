@@ -9,6 +9,11 @@
 		<item key="incremental" value="false"/>
 		<item key="isRegEx" value="false"/>
 		<list key="findhistory">
+			<item value="return"/>
+			<item value="cc_TX"/>
+			<item value="burst"/>
+			<item value="i2c_buffer"/>
+			<item value="tx_power"/>
 			<item value="ota_ve"/>
 			<item value="0x0000"/>
 			<item value="L"/>
@@ -19,11 +24,6 @@
 			<item value="set_secur"/>
 			<item value="set"/>
 			<item value="set_id"/>
-			<item value="sweep_wait"/>
-			<item value="sweep_dwell_ms"/>
-			<item value="ember_network"/>
-			<item value="sweep_rx_active"/>
-			<item value="emberafmessage"/>
 		</list>
 		<list key="replacehistory">
 		</list>

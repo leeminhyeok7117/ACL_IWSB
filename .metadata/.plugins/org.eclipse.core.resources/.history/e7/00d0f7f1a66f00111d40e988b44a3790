@@ -1,0 +1,232 @@
+#include "em_i2c.h"
+#include "app_log.h"
+#include "btl_interface.h"
+#include "rail.h"
+#include "sl_i2cslave_config.h"
+#include "sl_rail_util_init.h"
+
+#define CC_DATA      0x01
+#define CC_UPDATE    0x02
+#define CC_ERASE     0x03
+#define CC_TX        0x04 //1000개 발사 주소값
+#define TOTAL_CHUNKS 414 //0~414
+
+static uint32_t gbl_offset = 0;
+static uint8_t rx_buffer[I2C_BUFFER_SIZE];
+static uint8_t tx_buffer[I2C_BUFFER_SIZE];
+static volatile bool data_ready = false;
+static volatile bool tx_ready = false;
+static volatile uint16_t rx_len = 0;
+static volatile uint16_t tx_len = 0;
+
+// 보낼때 필요한 것들 설정 값
+#define TX_TOTAL_PKTS     1000
+#define TX_PAYLOAD_LEN    16
+#define TX_PAYLOAD_VALUE  0xAA
+#define TX_CHANNEL        0
+static uint8_t  tx_payload[TX_PAYLOAD_LEN];
+static volatile bool     tx_active    = false;
+static volatile bool     send_next    = false;
+static volatile bool     burst_done   = false;
+static volatile uint16_t packets_sent = 0;
+//
+
+typedef struct __attribute__((packed)) fw_update
+{
+  uint8_t cc;
+  uint16_t packet_num;
+  uint8_t len;
+  uint8_t buf_data[128];
+} fw_update_t;
+
+void I2C0_IRQHandler(void)
+{
+    uint32_t pending = I2C0->IF;
+
+    if (pending & I2C_IF_ADDR) {
+        uint8_t addr = I2C0->RXDATA;
+        if (addr & 0x01){
+            tx_len = 0;
+            I2C0->TXDATA = tx_buffer[tx_len++];
+            I2C_IntClear(I2C0, I2C_IFC_ADDR);
+            I2C0->CMD = I2C_CMD_ACK;
+            tx_ready = true;
+        }
+
+        else {
+            rx_len = 0;
+            I2C_IntClear(I2C0, I2C_IFC_ADDR);
+            I2C0->CMD = I2C_CMD_ACK;
+        }
+        return;
+    }
+
+    if (pending & I2C_IF_RXDATAV) {
+        if (rx_len < sizeof(rx_buffer)) {
+            rx_buffer[rx_len++] = I2C0->RXDATA;
+        } else {
+            (void)I2C0->RXDATA;
+        }
+        I2C0->CMD = I2C_CMD_ACK;
+    }
+
+    if (pending & I2C_IF_TXBL) {
+        if (tx_len < sizeof(tx_buffer)){
+            I2C0->TXDATA = tx_buffer[tx_len++];
+        }
+        else{
+            I2C0->TXDATA = 0xFF;
+        }
+    }
+
+    if (pending & I2C_IF_SSTOP) {
+        I2C_IntClear(I2C0, I2C_IFC_SSTOP);
+        if (!tx_ready) {
+            data_ready = true;
+        }
+        tx_ready = false;
+    }
+}
+//데이터 발사 관련 함수
+void tx_burst_process(RAIL_Handle_t rail_handle)
+{
+    if (tx_active && send_next && packets_sent < TX_TOTAL_PKTS) {
+        send_next = false;
+        RAIL_WriteTxFifo(rail_handle, tx_payload, TX_PAYLOAD_LEN, true);
+        RAIL_Status_t st = RAIL_StartTx(rail_handle, TX_CHANNEL,
+                                        RAIL_TX_OPTIONS_DEFAULT, NULL);
+        if (st != RAIL_STATUS_NO_ERROR) {
+            send_next = true;
+        }
+    }
+
+    if (burst_done) {
+        burst_done = false;
+        app_log_info("=== TX burst done: %u pkts ===\r\n",
+                     (unsigned)packets_sent);
+    }
+}
+
+void sl_rail_util_on_event(RAIL_Handle_t rail_handle, RAIL_Events_t events)
+{
+    (void)rail_handle;
+
+    if (events & RAIL_EVENT_TX_PACKET_SENT) {
+        packets_sent++;
+        if (packets_sent >= TX_TOTAL_PKTS) {
+            tx_active  = false;
+            burst_done = true;
+        } else {
+            send_next = true;
+        }
+    }
+    if (events & (RAIL_EVENT_TX_ABORTED | RAIL_EVENT_TX_BLOCKED
+                | RAIL_EVENT_TX_UNDERFLOW | RAIL_EVENT_TX_CHANNEL_BUSY)) {
+        send_next = true;
+    }
+}
+//데이터 발사 관련 함수
+
+void app_process_action(RAIL_Handle_t rail_handle)
+{
+    tx_burst_process(rail_handle); //기존 OTA 로직 보호를 위한 것
+
+    if (!data_ready) {
+        return;
+    }
+    data_ready = false;
+
+    app_log_info("fnc : %02x \r\n", rx_buffer[0]);
+
+    switch(rx_buffer[0]) {
+
+        case CC_DATA:
+            app_log_info("Data received OK\r\n");
+            rx_len = 0;
+            tx_buffer[0] = 0x02;
+            break;
+
+        case CC_UPDATE: {
+
+          fw_update_t* data = (fw_update_t*)rx_buffer;
+          uint16_t chunk_num = data->packet_num;
+          uint8_t len = data->len;
+          uint8_t buf[128] = {0,};
+          memcpy(buf, data->buf_data, len);
+
+            // 외부 플래시에 저장
+          app_log_info("Chunk %d/%d saving (gbl_offset=%lu, len=%u)\r\n",
+                          chunk_num + 1, TOTAL_CHUNKS + 1,
+                          (unsigned long)gbl_offset, len);
+
+
+            long ret;
+
+            ret = bootloader_writeStorage(
+                0,
+                gbl_offset,
+                buf,
+                len);
+
+            app_log_info("Last bytes: %02X %02X %02X %02X \r\n",
+                         buf[len - 4], buf[len - 3],
+                         buf[len - 2], buf[len - 1]);
+
+            app_log_info("write result : 0x%04lX (datalen %lu next_offset will be %lu)\r\n",
+                            ret, (unsigned long)len, (unsigned long)(gbl_offset + len));
+
+            static uint8_t verify_buf[128];
+            bootloader_readStorage(0, gbl_offset, verify_buf, len);
+
+            if (memcmp(verify_buf, buf, len) != 0) {
+                for (uint32_t i = 0; i < len; i++) {
+                    if (verify_buf[i] != buf[i]) {
+                        app_log_info("!!! Chunk %d byte %lu: rx=%02X flash=%02X\r\n",
+                                     chunk_num, (unsigned long)i,
+                                     buf[i], verify_buf[i]);
+                    }
+                }
+            }
+
+            gbl_offset += len;
+
+            if (chunk_num == 0xFFFF) {
+                app_log_info("Verifying...\r\n");
+                ret = bootloader_verifyImage(0, NULL);
+                if (ret == BOOTLOADER_OK) {
+                    app_log_info("Update OK! Rebooting\r\n");
+                    bootloader_setImageToBootload(0);
+                    bootloader_rebootAndInstall();
+                } else {
+                    app_log_info("Verify FAILED : 0x%04lx \r\n", ret);
+                    gbl_offset = 0;
+                }
+            }
+            break;
+        }
+
+        case CC_ERASE :
+          uint32_t slot = (uint32_t)rx_buffer[1];
+          int32_t erase_ret = bootloader_eraseStorageSlot(slot);
+          app_log_info("erase slot result : 0x%04lX \r\n", erase_ret);
+          break;
+
+        case CC_TX:
+          if (!tx_active) {
+              for (uint16_t i = 0; i < TX_PAYLOAD_LEN; i++)
+                  tx_payload[i] = TX_PAYLOAD_VALUE;
+              tx_active    = true;
+              packets_sent = 0;
+              send_next    = true;
+              app_log_info("TX burst start (%d pkts, 0x%02X)\r\n",
+                           TX_TOTAL_PKTS, TX_PAYLOAD_VALUE);
+          }
+          break;
+
+
+        default:
+            app_log_info("Unknown CC\r\n");
+            rx_len = 0;
+            break;
+    };
+}

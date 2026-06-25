@@ -1,0 +1,10 @@
+#ifndef SL_I2C_SLAVE_CONFIG_H
+#define SL_I2C_SLAVE_CONFIG_H
+
+#define I2C_SLAVE_ADDRESS     0xE2
+
+#define I2C_SLAVE_PERIPHERAL  I2C0
+
+#define I2C_BUFFER_SIZE       131
+
+#endif
