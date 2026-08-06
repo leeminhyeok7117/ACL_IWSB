@@ -502,6 +502,211 @@ Example syntax (.slcc or .slcp) for populating this file:
       </div>
       
     </div>
+  </div>
+
+    
+  
+  <div class="command">
+    <div class="command-header-bar"></div>
+    <div class="command-header">
+      <span class="command-name">meas</span>
+      <span class="command-handler">cli_meas_start</span>
+    </div>
+    <div class="command-info">
+      <div class="help">Start one RSSI measurement campaign (frequency-hopping sweep)</div>
+      
+      
+    </div>
+  </div>
+
+    
+  
+  <div class="command">
+    <div class="command-header-bar"></div>
+    <div class="command-header">
+      <span class="command-name">meas_stat</span>
+      <span class="command-handler">cli_meas_stat</span>
+    </div>
+    <div class="command-info">
+      <div class="help">Print RSSI log status/record count</div>
+      
+      
+    </div>
+  </div>
+
+    
+  
+  <div class="command">
+    <div class="command-header-bar"></div>
+    <div class="command-header">
+      <span class="command-name">meas_clear</span>
+      <span class="command-handler">cli_meas_clear</span>
+    </div>
+    <div class="command-info">
+      <div class="help">Clear the RSSI log (reset cursor)</div>
+      
+      
+    </div>
+  </div>
+
+    
+  
+  <div class="command">
+    <div class="command-header-bar"></div>
+    <div class="command-header">
+      <span class="command-name">meas_auto</span>
+        <span class="command-argument">[u8]</span>
+      <span class="command-handler">cli_meas_auto</span>
+    </div>
+    <div class="command-info">
+      <div class="help">Enable/disable periodic auto sweep (arg 0/1; no arg = show state)</div>
+      
+      
+      <div class="argument-list">
+      <div class="arguments-title">Arguments</div>
+      <ul>
+        <li>
+        <span class="argument-name">u8</span><em>(optional)</em> 1=enable periodic sweep, 0=disable
+        </li>
+      </ul>
+      </div>
+      
+    </div>
+  </div>
+
+    
+  
+  <div class="command">
+    <div class="command-header-bar"></div>
+    <div class="command-header">
+      <span class="command-name">ota_target</span>
+        <span class="command-argument">u8</span>
+      <span class="command-handler">cli_ota_target</span>
+    </div>
+    <div class="command-info">
+      <div class="help">Select OTA target device_id (1-4)</div>
+      
+      
+      <div class="argument-list">
+      <div class="arguments-title">Arguments</div>
+      <ul>
+        <li>
+        <span class="argument-name">u8</span>device_id
+        </li>
+      </ul>
+      </div>
+      
+    </div>
+  </div>
+
+    
+  
+  <div class="command">
+    <div class="command-header-bar"></div>
+    <div class="command-header">
+      <span class="command-name">ota_start</span>
+        <span class="command-argument">u8</span>
+      <span class="command-handler">cli_ota_start</span>
+    </div>
+    <div class="command-info">
+      <div class="help">[TEST-ONLY] Start OTA to device_id without I2C</div>
+      
+      
+      <div class="argument-list">
+      <div class="arguments-title">Arguments</div>
+      <ul>
+        <li>
+        <span class="argument-name">u8</span>device_id
+        </li>
+      </ul>
+      </div>
+      
+    </div>
+  </div>
+
+    
+  
+  <div class="command">
+    <div class="command-header-bar"></div>
+    <div class="command-header">
+      <span class="command-name">slave_list</span>
+      <span class="command-handler">cli_slave_list</span>
+    </div>
+    <div class="command-info">
+      <div class="help">Print registered slave list</div>
+      
+      
+    </div>
+  </div>
+
+    
+  
+  <div class="command">
+    <div class="command-header-bar"></div>
+    <div class="command-header">
+      <span class="command-name">poll_status</span>
+      <span class="command-handler">cli_poll_status</span>
+    </div>
+    <div class="command-info">
+      <div class="help">Force restart polling cycle</div>
+      
+      
+    </div>
+  </div>
+
+    
+  
+  <div class="command">
+    <div class="command-header-bar"></div>
+    <div class="command-header">
+      <span class="command-name">iq_start</span>
+        <span class="command-argument">[u16]</span>
+      <span class="command-handler">cli_iq_start</span>
+    </div>
+    <div class="command-info">
+      <div class="help">[IQ ground test] Open IQ measurement window for dur_s seconds (replaces OBC 0x05)</div>
+      
+      
+      <div class="argument-list">
+      <div class="arguments-title">Arguments</div>
+      <ul>
+        <li>
+        <span class="argument-name">u16</span><em>(optional)</em> Duration in seconds (default 5)
+        </li>
+      </ul>
+      </div>
+      
+    </div>
+  </div>
+
+    
+  
+  <div class="command">
+    <div class="command-header-bar"></div>
+    <div class="command-header">
+      <span class="command-name">iq_status</span>
+      <span class="command-handler">cli_iq_status</span>
+    </div>
+    <div class="command-info">
+      <div class="help">[IQ ground test] Print queued IQ record count</div>
+      
+      
+    </div>
+  </div>
+
+    
+  
+  <div class="command">
+    <div class="command-header-bar"></div>
+    <div class="command-header">
+      <span class="command-name">iq_dump</span>
+      <span class="command-handler">cli_iq_dump</span>
+    </div>
+    <div class="command-info">
+      <div class="help">[IQ ground test] Dump all queued IQ records as CSV over UART (replaces OBC 0x06)</div>
+      
+      
+    </div>
   </div></div>
 
 <script>

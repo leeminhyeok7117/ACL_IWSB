@@ -1,4 +1,4 @@
-//fileChooser/BINARY_IMAGE=/home/lmh/cubesat_TX.s37
-//fileChooser/BINARY_IMAGE_BOOTLOADER=/home/lmh/SimplicityStudio/v5_workspace/bootloader_ota_cubesat/artifact/bootloader_ota_cubesat-combined.s37
+//fileChooser/BINARY_IMAGE=/home/lmh/SimplicityStudio/v5_workspace/cubesat_TX_IWSB/GNU ARM v12.2.1 - Default/cubesat_TX_IWSB.s37
+//fileChooser/BINARY_IMAGE_BOOTLOADER=/home/lmh/SimplicityStudio/v5_workspace/bootloader-storage-spiflash-sfdp-single/artifact/bootloader-storage-spiflash-sfdp-single-combined.s37
 eclipse.preferences.version=1
-lastTimeStarted=1782290444279
+lastTimeStarted=1784966683125

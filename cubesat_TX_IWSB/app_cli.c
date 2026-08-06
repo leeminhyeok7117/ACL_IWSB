@@ -23,6 +23,7 @@
 #include "stack-info.h"
 #include "mbedtls/build_info.h"
 #include "app_process.h"
+#include "iq_capture.h"   // [IQ] 지상 CLI 테스트용(I2C 없이 트리거/덤프)
 
 // -----------------------------------------------------------------------------
 //                              Macros and Typedefs
@@ -475,6 +476,196 @@ void cli_meas_auto(sl_cli_command_arg_t *arguments)
   }
   app_log_info("[MEAS] auto = %d (gap=%us)\n",
                (int)meas_auto_get(), (unsigned)MEAS_AUTO_GAP_S);
+}
+
+/******************************************************************************
+ * [IQ 지상테스트] CLI - iq_start : IQ 측정 창을 dur_s 초 동안 염 (OBC 0x05 대체)
+ *   사용법: iq_start <dur_s>   (인자 없으면 기본 5초)
+ *****************************************************************************/
+void cli_iq_start(sl_cli_command_arg_t *arguments)
+{
+  (void)arguments;
+  // ★ OBC 가 SPI/I2C 로 0x05 를 보냈을 때와 "완전히 동일한" 경로를 탄다.
+  //   (eval 보드에서 OBC 없이 전 과정을 검증하기 위한 미러링)
+  //   OBC 핸들러(handle_cmd_iq_start)와 같은 OTA 가드 → 같은 진입점 순서.
+  obc_cmd_iq_start_mirror();
+}
+
+/******************************************************************************
+ * [IWSB 지상테스트] CLI - iq_abort : 진행 중인 미션 중단
+ *****************************************************************************/
+void cli_iq_abort(sl_cli_command_arg_t *arguments)
+{
+  (void)arguments;
+  iq_mission_abort();
+}
+
+/******************************************************************************
+ * [IQ 지상테스트] CLI - iq_status : 큐에 쌓인 완성 레코드 수 출력
+ *****************************************************************************/
+void cli_iq_status(sl_cli_command_arg_t *arguments)
+{
+  (void)arguments;
+  // OBC 가 리드백 프레임 헤더로 보게 될 값과 동일한 정보를 그대로 표시한다.
+  app_log_info("[IWSB] mission=%u  sweeps=%u/%u  batch_ready=%u  queued=%u\n",
+               (unsigned)iq_mission_is_active(),
+               (unsigned)iq_mission_sweeps_done(),
+               (unsigned)IQ_MISSION_SWEEPS,
+               (unsigned)iq_mission_batch_ready(),
+               (unsigned)iq_readback_count());
+}
+
+/******************************************************************************
+ * [IWSB 지상테스트] CLI - iq_auto : 배치 자동 회수 on/off
+ *
+ *   실제 OBC 는 0x06 을 폴링해서 배치를 알아서 가져간다. CLI 로 시험할 때는
+ *   사람이 iq_dump 를 대신 쳐야 하는데, 100 스윕이면 100번을 쳐야 하고
+ *   30초 안에 못 치면 그 배치는 버려진다.
+ *   이 모드를 켜면 tick 이 배치를 자동으로 회수하고 스윕당 한 줄만 요약 출력한다
+ *   → 사람 개입 없이 100 스윕 미션 전체를 돌려볼 수 있다.
+ *   ※ 원시 IQ 값이 필요하면 끄고 iq_dump 를 쓰거나, 스윕 수를 줄여서 볼 것.
+ *****************************************************************************/
+void cli_iq_auto(sl_cli_command_arg_t *arguments)
+{
+  if (sl_cli_get_argument_count(arguments) == 0) {
+    app_log_info("[IWSB] auto-drain = %s\n", iq_auto_drain_get() ? "ON" : "OFF");
+    return;
+  }
+  uint8_t on = sl_cli_get_argument_uint8(arguments, 0);
+  iq_auto_drain_set(on != 0U);
+  app_log_info("[IWSB] auto-drain = %s\n", on ? "ON (summary only)" : "OFF");
+}
+
+/******************************************************************************
+ * [지상테스트] CLI - spi_stat : SPI 슬레이브 진단
+ *   SPI 슬레이브는 마스터가 클럭을 넣기 전엔 아무 일도 안 하므로, 이 카운터로
+ *   "배선 / 클럭 / 프레이밍 / 파싱" 중 어디까지 도달했는지를 좁혀 나간다.
+ *****************************************************************************/
+void cli_spi_stat(sl_cli_command_arg_t *arguments)
+{
+  (void)arguments;
+  obc_spi_stats_t s;
+  obc_spi_get_stats(&s);
+
+  app_log_info("[SPI] pins: CS=%u CLK=%u MOSI=%u   (유휴 정상값: CS=1 CLK=0 MOSI=0)\n",
+               s.cs_level, s.clk_level, s.mosi_level);
+  app_log_info("[SPI] rx_bytes=%lu  cs_edges=%lu  frames=%lu\n",
+               (unsigned long)s.bytes, (unsigned long)s.cs_edges,
+               (unsigned long)s.frames);
+  app_log_info("[SPI] last_cmd=0x%02X last_len=%u  first_rx=0x%04X\n",
+               s.last_cmd, s.last_len, s.first_rx);
+  app_log_info("[SPI] overrun=%lu  %s\n", (unsigned long)s.overrun,
+               (s.overrun == 0U) ? "(정상)" : "★ 클럭이 너무 빠름 — 속도를 낮출 것");
+  app_log_info("[SPI] staged=%u bytes, tx_idx=%u\n", s.staged, s.tx_idx);
+
+  // 스테이징된 프레임 선두 — 마스터가 읽었을 때 받아야 할 바이트열.
+  uint16_t n = 0;
+  const uint8_t *buf = obc_readback_buffer(&n);
+  if (buf != NULL && n >= 8U) {
+    app_log_info("[SPI] MISO 선두 8B: %02X %02X %02X %02X %02X %02X %02X %02X"
+                 "  (첫 바이트가 A5 여야 정상)\n",
+                 buf[0], buf[1], buf[2], buf[3], buf[4], buf[5], buf[6], buf[7]);
+  }
+
+  // 진단 해석 가이드 — 로그만 보고 판단할 수 있게 함께 출력.
+  if (s.bytes == 0U && s.cs_edges == 0U) {
+    app_log_info("[SPI] → 아무 활동 없음. 마스터가 클럭/CS 를 안 넣거나 배선 미연결.\n");
+  } else if (s.bytes == 0U) {
+    app_log_info("[SPI] → CS 는 오는데 클럭이 없음. SCLK 배선/LOC 확인.\n");
+  } else if (s.cs_edges == 0U) {
+    app_log_info("[SPI] → 바이트는 오는데 CS 엣지가 없음. CS 배선/극성 확인.\n");
+  } else {
+    app_log_info("[SPI] → 배선/프레이밍 정상. last_cmd 가 보낸 명령과 같은지 확인.\n");
+  }
+}
+
+/******************************************************************************
+ * [지상테스트] CLI - spi_clear : SPI 진단 카운터 초기화
+ *****************************************************************************/
+void cli_spi_clear(sl_cli_command_arg_t *arguments)
+{
+  (void)arguments;
+  obc_spi_reset_stats();
+  app_log_info("[SPI] stats cleared.\n");
+}
+
+/******************************************************************************
+ * [지상테스트] CLI - spi_inject : 물리 SPI 없이 명령 경로만 검증
+ *   사용: spi_inject 05      → OBC 가 0x05 를 보낸 것과 동일하게 처리
+ *         spi_inject 06      → 리드백 스테이징까지 수행(이후 spi_stat 로 확인)
+ *   ※ 배선/클럭/프레이밍은 검증하지 못한다 — 그건 실제 마스터가 있어야 한다.
+ *****************************************************************************/
+void cli_spi_inject(sl_cli_command_arg_t *arguments)
+{
+  if (sl_cli_get_argument_count(arguments) == 0) {
+    app_log_error("usage: spi_inject <cmd_hex> [arg_hex]\n");
+    return;
+  }
+  uint8_t frame[2];
+  uint16_t len = 1;
+  frame[0] = sl_cli_get_argument_uint8(arguments, 0);
+  if (sl_cli_get_argument_count(arguments) >= 2) {
+    frame[1] = sl_cli_get_argument_uint8(arguments, 1);
+    len = 2;
+  }
+  app_log_info("[SPI] inject frame: %02X%s (len=%u)\n",
+               frame[0], (len == 2) ? " .." : "", len);
+  obc_spi_inject(frame, len);
+}
+
+/******************************************************************************
+ * [IQ 지상테스트] CLI - iq_dump : 쌓인 IQ 전부를 UART 로 CSV 형태로 출력
+ *   (OBC 0x06 I2C 리드백과 동일 데이터를 I2C 없이 확인하기 위한 디버그 경로)
+ *   출력: tx_id,rx_id,channel,seq,sample_idx,I,Q  한 줄씩
+ *****************************************************************************/
+void cli_iq_dump(sl_cli_command_arg_t *arguments)
+{
+  (void)arguments;
+  // ★ 스윕이 도는 중에는 절대 덤프하지 않는다.
+  //   이 함수는 레코드당 64줄을 UART 로 뱉어 최대 십수 초를 블로킹한다. 그동안
+  //   tick 이 멈추면 측정 상태머신도 멈추고, 송신 스트림이 슬롯을 넘겨 계속
+  //   켜져 있게 된다 → Connect MAC 송신 큐가 가득 차서 이후 모든 전송이
+  //   0x39(MAC_TRANSMIT_QUEUE_FULL)로 영구 실패한다(실제 발생한 장애).
+  //   감시 타이머가 이제 최악은 막아 주지만, 애초에 유발하지 않는 것이 맞다.
+  if (meas_campaign_active()) {
+    app_log_error("[IQ] sweep in progress — dump blocked (would stall the radio).\n");
+    app_log_info("[IQ] 스윕이 끝난 뒤에 다시 시도하거나, 'iq_auto 1' 로 자동 회수를 쓰세요.\n");
+    return;
+  }
+  // ★ 전용 버퍼를 따로 두지 않는다(33KB 중복 방지). OBC 리드백과 같은 공용
+  //   스테이징 버퍼를 그대로 재사용한다 — 내용/형식이 완전히 동일하므로
+  //   CLI 덤프가 곧 "OBC 가 받게 될 바이트"를 그대로 보여주는 셈이다.
+  obc_stage_iq_readback();
+  uint16_t n = 0;
+  const uint8_t *buf = obc_readback_buffer(&n);
+  if (buf == NULL || n == 0U) {
+    app_log_info("[IQ] nothing staged\n");
+    return;
+  }
+  // 프레임 헤더 해석 (iq_capture.h 정의) — OBC 가 보게 될 상태 플래그와 동일.
+  if (buf[0] != IQ_FRAME_MAGIC) {
+    app_log_error("[IQ] bad magic 0x%02X\n", buf[0]);
+    return;
+  }
+  uint8_t  nrec = buf[5];
+  uint16_t off  = IQ_FRAME_HDR;
+  app_log_info("[IWSB] mission=%u sweeps=%u/%u batch_ready=%u n_records=%u\n",
+               buf[1], buf[2], buf[3], buf[4], (unsigned)nrec);
+  app_log_info("tx_id,rx_id,channel,seq,sample_idx,I,Q\n");
+  for (uint8_t r = 0; r < nrec; r++) {
+    uint8_t tx_id = buf[off + 0], rx_id = buf[off + 1];
+    uint8_t ch    = buf[off + 2], seq   = buf[off + 3];
+    uint8_t nsamp = buf[off + 4];
+    for (uint8_t k = 0; k < nsamp; k++) {
+      const uint8_t *p = &buf[off + IQ_REC_HDR + (uint16_t)k * 4U];
+      int16_t I = (int16_t)((uint16_t)p[0] | ((uint16_t)p[1] << 8));
+      int16_t Q = (int16_t)((uint16_t)p[2] | ((uint16_t)p[3] << 8));
+      app_log_info("%u,%u,%u,%u,%u,%d,%d\n",
+                   tx_id, rx_id, ch, seq, k, I, Q);
+    }
+    off += IQ_REC_SIZE;
+  }
+  iq_batch_taken();   // UART 로 실제 출력했으므로 회수된 것으로 본다
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

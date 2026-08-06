@@ -182,7 +182,7 @@ app_cli.o: ../app_cli.c \
  /home/lmh/SimplicityStudio/v5_workspace/cubesat_TX_IWSB/config/sl_sensor_sink_config.h \
  ../app_init.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//protocol/flex/stack/include/stack-info.h \
- ../app_process.h
+ ../app_process.h ../iq_capture.h
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/toolchain/inc/sl_gcc_preinclude.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/legacy_hal/inc/platform-header.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_core.h:
@@ -367,3 +367,4 @@ app_cli.o: ../app_cli.c \
 ../app_init.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//protocol/flex/stack/include/stack-info.h:
 ../app_process.h:
+../iq_capture.h:

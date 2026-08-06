@@ -16,8 +16,11 @@
 #include "sl_board_control.h"
 #include "app_log.h"
 #include "sl_debug_swo.h"
+#include "gpiointerrupt.h"
 #include "sl_iostream_stdlib_config.h"
+#include "sl_iostream_init_usart_instances.h"
 #include "sl_mpu.h"
+#include "sl_simple_button_instances.h"
 #include "sl_iostream_init_instances.h"
 #include "sl_cos.h"
 
@@ -38,6 +41,8 @@ void sl_platform_init(void)
 void sl_driver_init(void)
 {
   sl_debug_swo_init();
+  GPIOINT_Init();
+  sl_simple_button_init_instances();
   sl_cos_send_config();
 }
 
@@ -80,5 +85,6 @@ void sl_internal_app_process_action(void)
 
 void sl_iostream_init_instances(void)
 {
+  sl_iostream_usart_init_instances();
 }
 

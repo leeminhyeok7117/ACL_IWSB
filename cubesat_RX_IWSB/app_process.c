@@ -31,9 +31,17 @@
 #include "fw_guard.h"
 #include "em_usart.h"
 #include "sl_power_manager.h"
+#include "iq_capture.h"   // [IQ] RAIL IQ 캡처 코어 (측정 슬롯에서만 사용)
 
 // [디버깅] VCOM(USART0) TX가 다 빠질 때까지 대기 → 로그 즉시 표시(sleep로 갇힘 방지)
-static inline void log_flush(void) { while (!(USART0->STATUS & USART_STATUS_TXC)) {} }
+//   ★ 비행 안전: 무한 대기 금지(TX 프로젝트와 동일 조치).
+//     VCOM 비활성/USART0 클럭 off 빌드에서 TXC 가 영원히 안 서면 여기서 멈춘다.
+static inline void log_flush(void)
+{
+  for (uint32_t guard = 0; guard < 100000U; guard++) {
+    if (USART0->STATUS & USART_STATUS_TXC) return;
+  }
+}
 
 // ─── [sleep 제어] 미가입 동안 EM2 sleep 차단 ────────────────────────────────
 //   EM1 requirement만으로는 Connect 스택이 EM2로 빠지는 경우가 있어 tick이
@@ -181,7 +189,16 @@ static int8_t           meas_last_lqi     = 0;
 static uint32_t         meas_report_due   = 0;
 static bool             meas_no_sleep_req = false;
 
+// ─── [IQ 측정] 캡처 결과 + 프래그먼트 리포트 상태 ───────────────────────────
+//   청취자일 때 측정 슬롯 안에서 iq_capture_burst() 로 원시 IQ 를 취득한 뒤,
+//   home 복귀 후 TX(Master)로 조각내어 전송한다(Connect 페이로드 제한 회피).
+static iq_sample_t      meas_iq_buf[IQ_SAMPLES_PER_LINK];
+static uint16_t         meas_iq_n         = 0;      // 이번 라운드 캡처한 복소샘플 수
+static bool             meas_iq_done      = false;  // 이번 라운드 캡처 완료 여부
+static uint8_t          meas_iq_frag      = 0;      // 다음 전송할 프래그먼트 인덱스
+
 static void meas_rx_tick(void);
+static void meas_rx_send_iq_frag(uint8_t frag_idx);
 
 // -----------------------------------------------------------------------------
 //                          Public Function Definitions
@@ -244,6 +261,13 @@ void emberAfMessageSentCallback(EmberStatus status, EmberOutgoingMessage *messag
   // [OTA 보호] 다운로드 중엔 송신 실패로 soft-rejoin 하지 않는다.
   //   (OTA 혼잡으로 ID_ANNOUNCE ACK가 실패하는 것뿐 → 네트워크를 나가면 OTA 중단)
   if (ota_download_active) {
+    consec_send_fails = 0;
+    return;
+  }
+  // [IQ 보호] 측정 라운드 중엔 채널을 잠깐씩 이탈하므로 그 사이 걸린 송신은
+  //   실패해도 정상이다(OTA 가드와 동일 논리). 여기서 세지 않으면 측정
+  //   캠페인이 반복될 때마다 카운터가 쌓여 soft-rejoin 폭주로 이어진다.
+  if (meas_rx_state != MEAS_RX_IDLE) {
     consec_send_fails = 0;
     return;
   }
@@ -353,6 +377,15 @@ void emberAfTickCallback(void)
       // probation 중인데 제한시간 내 healthy 못 됨 → 리셋(다음 부팅 카운터 누적→롤백)
       app_log_error("[GUARD] Boot health timeout — self-reset (probation count).\n");
       NVIC_SystemReset();
+    }
+  }
+
+  // ─── [비행 안전] IQ 캡처 후 수신 복구 실패 상태면 계속 되살린다 ──────────
+  //   방치하면 스택은 수신 중이라 믿는데 라디오는 꺼져 있어 노드가 조용히
+  //   네트워크에서 이탈한다. 아래 미가입 자체리셋보다 훨씬 싸고 빠른 복구 경로다.
+  if (iq_radio_is_deaf()) {
+    if (iq_radio_recover()) {
+      app_log_info("[IQ] radio RX recovered.\n");
     }
   }
 
@@ -519,19 +552,87 @@ void emberAfEnergyScanCompleteCallback(int8_t mean, int8_t min,
 //                          Static Function Definitions
 // -----------------------------------------------------------------------------
 
-// ─── [RSSI 측정] 측정 윈도 동안 EM1 sleep 차단(루프 고속 회전 → 비콘 타이밍 보장) ──
+// ─── [측정] 측정 윈도 동안 tick 고속 유지(슬롯/비콘 타이밍 보장) ──────────────
+//   ★ EM1 요구만으로는 부족하다. EM1 은 깊은 잠(EM2)만 막고, CPU 는 다음
+//     인터럽트까지 얕은 잠을 잔다. 측정 중 상태 전이가 제때 일어나려면 주기적
+//     웨이크업이 필요하다(이 파일 위쪽 block_sleep_while_unjoined 의 1초 타이머와
+//     같은 기법, 주기만 짧게). TX 와 슬롯 타이밍이 어긋나면 비콘을 놓친다.
+#define MEAS_TICK_MS   10U
+
+static sl_sleeptimer_timer_handle_t meas_wake_timer;
+
+static void meas_wake_cb(sl_sleeptimer_timer_handle_t *h, void *d)
+{
+  (void)h; (void)d;   // 빈 콜백 — CPU 를 깨우는 것 자체가 목적
+}
+
 static void meas_rx_set_sleep_block(bool block)
 {
   if (block && !meas_no_sleep_req) {
     sl_power_manager_add_em_requirement(SL_POWER_MANAGER_EM1);
+    sl_sleeptimer_start_periodic_timer_ms(&meas_wake_timer, MEAS_TICK_MS,
+                                          meas_wake_cb, NULL, 0, 0);
     meas_no_sleep_req = true;
   } else if (!block && meas_no_sleep_req) {
+    sl_sleeptimer_stop_timer(&meas_wake_timer);
     sl_power_manager_remove_em_requirement(SL_POWER_MANAGER_EM1);
     meas_no_sleep_req = false;
   }
 }
 
-// ─── [RSSI 측정] 빈 비콘 1개 브로드캐스트(송신원 전용) ────────────────────────
+// ─── [IQ] 연속 송신(TX stream) — 송신원 전용 ────────────────────────────────
+//   ★ 안전 최우선: 스트림이 켜진 채로 남으면 그 채널을 계속 점유(재밍)하고
+//     자신은 네트워크에서 이탈한다. stop 은 슬롯 종료·OTA 선점 등 모든 경로에서
+//     무조건 호출하고, idempotent(이미 꺼져 있으면 무해)하게 만든다.
+static bool meas_rx_streaming = false;
+
+// ─── [안전장치] 송신 스트림 감시 타이머 (TX 프로젝트와 동일 조치) ────────────
+//   스트림 정지는 tick 이 담당하는데, tick 이 오래 굶으면 스트림이 슬롯을 넘겨
+//   계속 송신한다. 그러면 Connect MAC 이 아무것도 보내지 못해 송신 큐가 가득 차고
+//   이후 모든 전송이 0x39(MAC_TRANSMIT_QUEUE_FULL)로 영구 실패한다.
+//   tick 에 의존하지 않는 sleeptimer 콜백으로 강제 정지시킨다.
+#define MEAS_STREAM_GUARD_MS   400U   // 정상 스트림 길이(210ms)의 약 2배
+static sl_sleeptimer_timer_handle_t meas_stream_guard;
+static volatile bool meas_stream_guard_armed = false;
+static volatile bool meas_stream_guard_fired = false;
+
+static void meas_stream_guard_cb(sl_sleeptimer_timer_handle_t *handle, void *data)
+{
+  (void)handle; (void)data;
+  iq_stream_abort();               // 최소 조치: 송신만 즉시 멈춘다(ISR 안전)
+  meas_stream_guard_fired = true;  // 채널 원복/수신 재개는 tick 이 수행
+}
+
+static void meas_rx_stream_start(uint8_t channel)
+{
+  if (meas_rx_streaming) return;
+  // RAIL 레벨 PN9 스트림(스택 상태 검사 없음 — iq_capture.h 주석 참조).
+  if (iq_stream_start(channel)) {
+    meas_rx_streaming = true;
+    if (sl_sleeptimer_start_timer_ms(&meas_stream_guard, MEAS_STREAM_GUARD_MS,
+                                     meas_stream_guard_cb, NULL, 0, 0)
+        == SL_STATUS_OK) {
+      meas_stream_guard_armed = true;
+    }
+  } else {
+    app_log_error("[MEAS] TX stream start failed (ch=%u)\n", (unsigned)channel);
+  }
+}
+
+static void meas_rx_stream_stop(void)
+{
+  if (meas_stream_guard_armed) {
+    sl_sleeptimer_stop_timer(&meas_stream_guard);
+    meas_stream_guard_armed = false;
+  }
+  if (!meas_rx_streaming) return;
+  // 중지 후 같은 측정 채널에서 수신 재개(슬롯 종료 시 호출측이 home 으로 복귀).
+  iq_stream_stop(meas_cur_channel & 0x7FU);
+  meas_rx_streaming = false;
+}
+
+// ─── [구] 빈 비콘 1개 브로드캐스트 — 연속 송신 전환으로 미사용 ────────────────
+__attribute__((unused))
 static void meas_rx_send_beacon(uint8_t beacon_idx)
 {
   uint8_t msg[5] = {
@@ -543,6 +644,9 @@ static void meas_rx_send_beacon(uint8_t beacon_idx)
 }
 
 // ─── [RSSI 측정] 청취 결과를 TX(coordinator)로 리포트 ────────────────────────
+//   [IQ 전환] 청취자는 이제 IQ 모드로 캡처하므로 이 RSSI 리포트는 사용하지 않음.
+//   (참고용으로 남겨둠 — RSSI 병행 측정 재도입 시 재사용)
+__attribute__((unused))
 static void meas_rx_send_report(void)
 {
   int8_t avg = (meas_rssi_cnt > 0)
@@ -559,10 +663,23 @@ static void meas_rx_send_report(void)
 // ─── [RSSI 측정] tick 상태머신 ───────────────────────────────────────────────
 static void meas_rx_tick(void)
 {
+  // ─── [안전장치] 스트림 감시 타이머가 발동했다면 측정을 안전 종료 ──────────
+  //   송신은 콜백이 이미 멈췄다. 여기서 채널 원복 + 수신 재개까지 마무리한다.
+  if (meas_stream_guard_fired) {
+    meas_stream_guard_fired = false;
+    meas_stream_guard_armed = false;
+    meas_rx_streaming       = false;   // 콜백이 이미 껐다
+    app_log_error("[MEAS] stream guard fired (tick starved) — returning home.\n");
+    emberSetRadioChannelExtended(meas_home_channel, false);
+    meas_rx_set_sleep_block(false);
+    meas_rx_state = MEAS_RX_IDLE;
+  }
+
   // OTA 중이면 측정 중단하고 home 으로 안전 복귀.
   if (ota_download_active) {
     if (meas_rx_state != MEAS_RX_IDLE) {
-      emberSetRadioChannel(meas_home_channel);
+      meas_rx_stream_stop();   // ★ 최우선: 스트림이 남으면 채널 점유 + OTA 방해
+      emberSetRadioChannelExtended(meas_home_channel, false);
       meas_rx_set_sleep_block(false);
       meas_rx_state = MEAS_RX_IDLE;
     }
@@ -583,9 +700,10 @@ static void meas_rx_tick(void)
     meas_home_channel = emberGetRadioChannel();   // 복귀용 home 채널 캡처(보통 0)
     meas_rssi_sum = 0; meas_rssi_cnt = 0; meas_last_lqi = 0;
     meas_beacons_sent = 0;
+    meas_iq_n = 0; meas_iq_done = false; meas_iq_frag = 0;   // [IQ] 라운드 초기화
 
     meas_rx_set_sleep_block(true);                // 윈도 동안 sleep 차단
-    if (emberSetRadioChannel(meas_cur_channel & 0x7FU) != EMBER_SUCCESS) {
+    if (emberSetRadioChannelExtended(meas_cur_channel & 0x7FU, false) != EMBER_SUCCESS) {
       // 채널 전환 실패 → 즉시 포기(home 유지).
       meas_rx_set_sleep_block(false);
       return;
@@ -600,22 +718,41 @@ static void meas_rx_tick(void)
   if (meas_rx_state == MEAS_RX_ON_CHANNEL) {
     uint32_t el = sl_sleeptimer_tick_to_ms(now - meas_win_start);
 
-    // 내가 송신원이면: SETUP 후 GAP 간격으로 비콘 N개 송신.
-    if (meas_cur_tx_id == my_device_id && meas_beacons_sent < meas_cur_nbeacons) {
-      if (el >= MEAS_BEACON_SETUP_MS
-          && sl_sleeptimer_tick_to_ms(now - meas_last_beacon) >= MEAS_BEACON_GAP_MS) {
-        meas_rx_send_beacon(meas_beacons_sent);
-        meas_beacons_sent++;
-        meas_last_beacon = now;
+    // ─── 내가 송신원이면: 슬롯 동안 연속 송신(TX stream) ─────────────────────
+    //   짧은 비콘 대신 끊김 없는 스트림을 쏘아, 리스너가 어느 시점에 캡처해도
+    //   반드시 신호가 담기게 한다(비콘 방식은 캡처 창과 겹칠 확률이 사실상 0).
+    if (meas_cur_tx_id == my_device_id) {
+      if (!meas_rx_streaming && el >= MEAS_STREAM_START_MS
+          && el < MEAS_STREAM_STOP_MS) {
+        meas_rx_stream_start(meas_cur_channel & 0x7FU);
+      } else if (meas_rx_streaming && el >= MEAS_STREAM_STOP_MS) {
+        meas_rx_stream_stop();                 // 슬롯 종료 전 반드시 정지
       }
+    }
+
+    // ─── [IQ] 내가 청취자면: 스트림이 한창일 때 IQ 버스트 1회 캡처 ────────────
+    //   iq_capture_burst() 는 RAIL 을 잠깐 IQ 모드로 빌렸다 패킷 모드로 원복한다
+    //   (블로킹, 상한 IQ_CAPTURE_TIMEOUT_MS). 송신원이 연속 송신 중이므로 이
+    //   시점의 원시 IQ 에는 반드시 상대 신호가 담긴다.
+    if (meas_cur_tx_id != my_device_id && !meas_iq_done
+        && el >= MEAS_CAPTURE_AT_MS && iq_capture_ready()) {
+      // 캡처 후에도 같은 측정 채널에서 수신을 이어간다(슬롯 종료 시 home 복귀).
+      meas_iq_n = iq_capture_burst(meas_cur_channel & 0x7FU,
+                                   meas_cur_channel & 0x7FU,
+                                   meas_iq_buf,
+                                   IQ_SAMPLES_PER_LINK, IQ_DECIM,
+                                   IQ_CAPTURE_TIMEOUT_MS);
+      meas_iq_done = true;
     }
 
     // 슬롯 종료 → home 복귀.
     if (el >= MEAS_SLOT_MS) {
-      emberSetRadioChannel(meas_home_channel);
-      // 청취자였고 비콘을 들었으면 리포트 예약(device_id 만큼 스태거).
-      if (meas_cur_tx_id != my_device_id && meas_rssi_cnt > 0) {
+      meas_rx_stream_stop();                   // 보험: 무조건 정지
+      emberSetRadioChannelExtended(meas_home_channel, false);
+      // [IQ] 청취자였고 샘플을 얻었으면 프래그먼트 리포트 예약(device_id 스태거).
+      if (meas_cur_tx_id != my_device_id && meas_iq_n > 0) {
         meas_report_due = now;   // 기준 시각; 아래에서 스태거 적용
+        meas_iq_frag    = 0;
         meas_rx_state   = MEAS_RX_REPORTING;
       } else {
         meas_rx_set_sleep_block(false);
@@ -625,16 +762,58 @@ static void meas_rx_tick(void)
     return;
   }
 
-  // ─── home 복귀 후 리포트 전송(충돌 방지 스태거) ───────────────────────────
+  // ─── home 복귀 후 IQ 프래그먼트 전송 ──────────────────────────────────────
+  //   노드별 스태거(device_id * REPORT_GAP)로 시작 시점을 벌리고,
+  //   프래그먼트끼리도 IQ_FRAG_GAP_MS 간격을 둬 TX 큐 고갈/충돌을 막는다.
   if (meas_rx_state == MEAS_RX_REPORTING) {
     uint32_t since = sl_sleeptimer_tick_to_ms(now - meas_report_due);
-    if (since >= (uint32_t)my_device_id * MEAS_REPORT_GAP_MS) {
-      meas_rx_send_report();
-      meas_rx_set_sleep_block(false);
-      meas_rx_state = MEAS_RX_IDLE;
+    uint32_t due   = (uint32_t)my_device_id * MEAS_REPORT_GAP_MS
+                     + (uint32_t)meas_iq_frag * IQ_FRAG_GAP_MS;
+    if (since >= due) {
+      meas_rx_send_iq_frag(meas_iq_frag);
+      meas_iq_frag++;
+      if (meas_iq_frag >= IQ_N_FRAGS) {
+        meas_rx_set_sleep_block(false);
+        meas_rx_state = MEAS_RX_IDLE;
+      }
     }
     return;
   }
+}
+
+// ─── [IQ 측정] 캡처한 IQ 를 조각내어 TX(Master)로 전송 ───────────────────────
+//   Connect 앱 페이로드(~111B) 제한 때문에 IQ_FRAG_SAMPLES 개씩 나눠 보낸다.
+//   payload: [0]=type [1]seq [2]tx_id [3]ch [4]rx_id [5]frag_idx [6]n_frags
+//            [7]n_samp  [8..]= iq bytes (n_samp*4, LE)
+static void meas_rx_send_iq_frag(uint8_t frag_idx)
+{
+  uint16_t start = (uint16_t)frag_idx * IQ_FRAG_SAMPLES;
+  if (start >= meas_iq_n) {
+    // 이 조각에 실을 샘플이 없으면 빈(n_samp=0) 조각을 보내 프레임 수를 맞춘다.
+    start = meas_iq_n;
+  }
+  uint16_t nsamp = meas_iq_n - start;
+  if (nsamp > IQ_FRAG_SAMPLES) nsamp = IQ_FRAG_SAMPLES;
+
+  uint8_t msg[IQ_REPORT_HDR + IQ_FRAG_SAMPLES * 4U];
+  msg[0] = MSG_TYPE_IQ_REPORT;
+  msg[1] = meas_cur_seq;
+  msg[2] = meas_cur_tx_id;
+  msg[3] = meas_cur_channel;
+  msg[4] = my_device_id;
+  msg[5] = frag_idx;
+  msg[6] = (uint8_t)IQ_N_FRAGS;
+  msg[7] = (uint8_t)nsamp;
+  for (uint16_t k = 0; k < nsamp; k++) {
+    const iq_sample_t *s = &meas_iq_buf[start + k];
+    uint8_t *p = &msg[IQ_REPORT_HDR + k * 4U];
+    p[0] = (uint8_t)((uint16_t)s->i & 0xFF);
+    p[1] = (uint8_t)(((uint16_t)s->i >> 8) & 0xFF);
+    p[2] = (uint8_t)((uint16_t)s->q & 0xFF);
+    p[3] = (uint8_t)(((uint16_t)s->q >> 8) & 0xFF);
+  }
+  emberMessageSend(EMBER_COORDINATOR_ADDRESS, CUSTOM_ENDPOINT, 0,
+                   (uint8_t)(IQ_REPORT_HDR + nsamp * 4U), msg, tx_options);
 }
 
 static void handle_poll_request(EmberIncomingMessage *message)
@@ -704,7 +883,9 @@ static void id_announce_timer_cb(sl_sleeptimer_timer_handle_t *handle, void *dat
   if (network_joined) {
     // [OTA 보호] 다운로드 중엔 전송 억제(혼잡으로 ACK 실패 → soft-rejoin 유발 방지).
     //   타이머는 계속 돌려 OTA 종료 후 자동으로 announce 재개.
-    if (!ota_download_active) {
+    // [IQ 보호] 측정 라운드 중에도 동일 이유로 억제(채널 이탈 중 전송 시도 방지).
+    //   타이머는 계속 돌려 측정 종료 후 자동으로 announce 재개.
+    if (!ota_download_active && meas_rx_state == MEAS_RX_IDLE) {
       send_id_announce();
     }
     sl_sleeptimer_start_timer_ms(&id_announce_timer,

@@ -38,7 +38,7 @@
 // <h> PA Configuration
 // <o SL_RAIL_UTIL_PA_POWER_DECI_DBM> Initial PA Power (deci-dBm, 100 = 10.0 dBm)
 // <i> Default: 100
-#define SL_RAIL_UTIL_PA_POWER_DECI_DBM      100
+#define SL_RAIL_UTIL_PA_POWER_DECI_DBM      190
 // <o SL_RAIL_UTIL_PA_RAMP_TIME_US> PA Ramp Time (microseconds)
 // <0-65535:1>
 // <i> Default: 10

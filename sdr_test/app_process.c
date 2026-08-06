@@ -6,6 +6,8 @@
 #include "sl_rail_util_init.h"
 #include <string.h>
 
+#include "sl_simple_button_instances.h" //버튼용
+
 #define CC_DATA      0x01
 #define CC_UPDATE    0x02
 #define CC_ERASE     0x03
@@ -20,8 +22,10 @@ static volatile bool tx_ready = false;
 static volatile uint16_t rx_len = 0;
 static volatile uint16_t tx_len = 0;
 
+static volatile bool btn_pressed = false; //버튼
+
 // 보낼때 필요한 것들 설정 값
-#define TX_TOTAL_PKTS     100
+#define TX_TOTAL_PKTS     10000
 #define TX_PAYLOAD_LEN    16
 #define TX_PAYLOAD_VALUE  0xAA
 #define TX_CHANNEL        0
@@ -31,6 +35,13 @@ static volatile bool     send_next    = false;
 static volatile bool     burst_done   = false;
 static volatile uint16_t packets_sent = 0;
 //
+
+void sl_button_on_change(const sl_button_t *handle) //버튼
+{
+    if (sl_button_get_state(handle) == SL_SIMPLE_BUTTON_PRESSED) {
+        btn_pressed = true;
+    }
+}
 
 typedef struct __attribute__((packed)) fw_update
 {
@@ -91,6 +102,16 @@ void I2C0_IRQHandler(void)
 //데이터 발사 관련 함수
 void tx_burst_process(RAIL_Handle_t rail_handle)
 {
+    //버튼
+    if (btn_pressed && !tx_active) {
+        btn_pressed = false;
+        memset(tx_payload, TX_PAYLOAD_VALUE, TX_PAYLOAD_LEN);
+        tx_active    = true;
+        packets_sent = 0;
+        send_next    = true;
+        app_log_info("TX burst start by BTN0\r\n");
+    }
+    //버튼
     if (tx_active && send_next && packets_sent < TX_TOTAL_PKTS) {
         send_next = false;
         RAIL_WriteTxFifo(rail_handle, tx_payload, TX_PAYLOAD_LEN, true);

@@ -2,7 +2,7 @@
 <model:MDescriptors xmlns:model="http://www.silabs.com/ss/Studio.ecore">
   <descriptors name="cubesat_TX_IWSB">
     <properties key="projectCommon.sdkId" value="com.silabs.sdk.stack.super:4.5.0._-1361324436"/>
-    <properties key="universalConfig.relativeWorkspacePath" value="../connect_soc_sink.slcw"/>
+    <properties key="universalConfig.relativeWorkspacePath" value="../cubesat_TX_IWSB.slcw"/>
     <properties key="universalConfig.generationDirectory" value=""/>
     <properties key="universalConfig.toolchainCompatibility" value="iar gcc"/>
     <properties key="projectCommon.overwriteCopiedSources" value="false"/>

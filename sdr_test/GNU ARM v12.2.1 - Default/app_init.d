@@ -81,6 +81,14 @@ app_init.o: ../app_init.c \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//app/common/util/app_log/app_log.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/iostream/inc/sl_iostream.h \
  /home/lmh/SimplicityStudio/v5_workspace/sdr_test/autogen/sl_iostream_handles.h \
+ /home/lmh/SimplicityStudio/v5_workspace/sdr_test/autogen/sl_iostream_init_usart_instances.h \
+ /home/lmh/SimplicityStudio/v5_workspace/sdr_test/autogen/sl_component_catalog.h \
+ /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/iostream/inc/sl_iostream_uart.h \
+ /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/iostream/inc/sl_iostream.h \
+ /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emdrv/dmadrv/inc/dmadrv.h \
+ /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emdrv/common/inc/ecode.h \
+ /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_ldma.h \
+ /home/lmh/SimplicityStudio/v5_workspace/sdr_test/config/dmadrv_config.h \
  /home/lmh/SimplicityStudio/v5_workspace/sdr_test/config/app_log_config.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/bootloader/api/btl_interface.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/bootloader/api/btl_errorcode.h \
@@ -172,6 +180,14 @@ app_init.o: ../app_init.c \
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//app/common/util/app_log/app_log.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/iostream/inc/sl_iostream.h:
 /home/lmh/SimplicityStudio/v5_workspace/sdr_test/autogen/sl_iostream_handles.h:
+/home/lmh/SimplicityStudio/v5_workspace/sdr_test/autogen/sl_iostream_init_usart_instances.h:
+/home/lmh/SimplicityStudio/v5_workspace/sdr_test/autogen/sl_component_catalog.h:
+/home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/iostream/inc/sl_iostream_uart.h:
+/home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/iostream/inc/sl_iostream.h:
+/home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emdrv/dmadrv/inc/dmadrv.h:
+/home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emdrv/common/inc/ecode.h:
+/home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_ldma.h:
+/home/lmh/SimplicityStudio/v5_workspace/sdr_test/config/dmadrv_config.h:
 /home/lmh/SimplicityStudio/v5_workspace/sdr_test/config/app_log_config.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/bootloader/api/btl_interface.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/bootloader/api/btl_errorcode.h:

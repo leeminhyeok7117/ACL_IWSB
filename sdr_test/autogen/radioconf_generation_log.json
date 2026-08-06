@@ -18,7 +18,7 @@
       },
       {
         "name": "Timing Detection Threshold",
-        "value": 31
+        "value": 29
       },
       {
         "name": "Timing Samples Threshold",
@@ -30,15 +30,15 @@
       },
       {
         "name": "Acquisition Channel Bandwidth",
-        "value": 850000
+        "value": 2000000
       },
       {
         "name": "IF Frequency",
-        "value": 750000
+        "value": 1070000
       },
       {
         "name": "PLL Bandwidth in TX mode",
-        "value": "PLLBandwdithEnum.BW_1500KHz"
+        "value": "PLLBandwdithEnum.BW_3000KHz"
       },
       {
         "name": "PLL Bandwidth in RX mode",
@@ -70,7 +70,7 @@
       },
       {
         "name": "AGC Power Target",
-        "value": -2
+        "value": -8
       },
       {
         "name": "RSSI Update Period",
@@ -82,7 +82,7 @@
       },
       {
         "name": "AGC Settling Delay",
-        "value": 29
+        "value": 39
       },
       {
         "name": "Frequency Offset Compensation (AFC) Step Scale",
@@ -150,15 +150,15 @@
       },
       {
         "name": "Actual Bandwidth",
-        "value": 841600
+        "value": 1881600
       },
       {
         "name": "Desired baudrate",
-        "value": 500000
+        "value": 1000000
       },
       {
         "name": "Actual sample frequency",
-        "value": 3500854.700854701
+        "value": 10000406.917599186
       }
     ]
   }

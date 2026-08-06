@@ -78,10 +78,21 @@ typedef enum {
 #define MEAS_TX_DEVICE_ID           0x00U  // 프로토콜/레코드에서 TX 자신 (RX 는 1~4)
 #define MEAS_CH_FIRST               0U     // 스윕 시작 채널 (915.0 MHz)
 #define MEAS_CH_LAST                20U    // 스윕 끝 채널 (915MHz 채널플랜 0~20 = 915.0~923.0 MHz)
-#define MEAS_N_BEACONS              4U     // 라운드당 비콘 수
-#define MEAS_BEACON_SETUP_MS        60U    // cmd 수신→비콘 시작 대기(리스너 채널전환 여유)
-#define MEAS_BEACON_GAP_MS          15U    // 비콘 간 간격
+#define MEAS_N_BEACONS              4U     // (구) 라운드당 비콘 수 — 연속 송신 전환으로 미사용
+#define MEAS_BEACON_SETUP_MS        60U    // cmd 수신→측정 시작 대기(리스너 채널전환 여유)
+#define MEAS_BEACON_GAP_MS          15U    // (구) 비콘 간 간격 — 연속 송신 전환으로 미사용
 #define MEAS_SLOT_MS                250U   // 측정 슬롯 길이(이후 home 복귀)
+
+// ─── [IQ] 연속 송신(TX stream) 타이밍 ────────────────────────────────────────
+//   [왜 바꿨나] 짧은 비콘(패킷)은 15ms 간격으로 수 백 µs 만 존재하는데, IQ 캡처
+//   창은 64샘플 ≈ 수십 µs 에 불과해 둘이 겹칠 확률이 사실상 0 이었다. 실측에서
+//   모든 레코드가 "수신기 켜질 때의 순간 반응 8샘플 + 잡음 56샘플" 로만 채워진
+//   이유가 이것. → 송신원이 슬롯 동안 "끊김 없이" 쏘면 어느 시점에 캡처해도
+//   반드시 신호가 담긴다. TX_STREAM_PN9(의사난수 변조)는 실제 통신과 같은
+//   대역폭을 점유하므로 경로 특성 측정에 적합하다(무변조 CW 보다 유리).
+#define MEAS_STREAM_START_MS        20U    // 채널 전환 후 이 시점부터 송신원이 스트리밍 시작
+#define MEAS_STREAM_STOP_MS         230U   // 슬롯(250ms) 종료 직전 반드시 정지
+#define MEAS_CAPTURE_AT_MS          80U    // 리스너가 캡처를 수행하는 시점(스트림 한가운데)
 #define MEAS_REPORT_GAP_MS          40U    // 리포트 충돌 방지 스태거(device_id 당)
 #define MEAS_COLLECT_MS             500U   // (TX) 라운드별 리포트 수집 윈도
 #define MEAS_BAND_915               0x00U  // channel 바이트 bit7=0 → 915MHz
@@ -124,5 +135,58 @@ bool     rssi_log_ready(void);                      // 로깅 가능 여부(칩�
 
 // [TEST-ONLY ota_start] I2C 없이 CLI로 OTA 시작(지상 테스트용). 실위성 전 제거.
 bool ota_start_test(uint8_t device_id);
+
+// ─── [IWSB 미션] OBC 명령 하나로 전 과정 자동 수행 ───────────────────────────
+//   0x05 → 버퍼가 비었는지 확인 후 스윕 100회 시작. 한 스윕마다 배치를 준비하고
+//   OBC 가 가져갈 때까지 대기(유실 방지). 상태는 리드백 프레임 헤더로 전달.
+#define IQ_MISSION_SWEEPS   100U    // 미션 1회 = 스윕 100번 (프레임 헤더로도 전달)
+void     iq_meas_trigger(uint16_t dur_s);   // 미션 시작(인자는 하위호환용, 미사용)
+// 0x05 공통 진입점 — OBC(SPI/I2C)와 CLI 가 동일 경로를 타도록 분리(OTA 가드 포함)
+void     obc_cmd_iq_start_mirror(void);
+// [지상 테스트 전용] 배치 자동 회수 on/off (비행 기본값 OFF).
+void     iq_auto_drain_set(bool on);
+bool     iq_auto_drain_get(void);
+void     iq_mission_abort(void);            // 미션 중단
+uint8_t  iq_mission_is_active(void);        // 1=수행 중
+uint16_t iq_mission_sweeps_done(void);      // 완료한 스윕 수
+uint8_t  iq_mission_batch_ready(void);      // 1=회수 대기 중인 배치 있음
+void     iq_batch_taken(void);              // 배치 회수 완료 통지(다음 스윕 허가)
+void     iq_ring_reset(void);               // 링 즉시 비움
+
+// ─── [IQ 측정] Master 집계 + OBC 리드백 (app_process.c 구현, app_init.c/CLI 호출) ─
+uint8_t  iq_readback_count(void);                             // 큐에 남은 IQ 레코드 수
+// 쌓인 IQ 레코드 전부를 한 프레임으로 직렬화(app_init.c I2C 리드백에서 호출).
+//   프레임: [n_records] + 레코드들(각 IQ_REC_SIZE 고정). 호출 후 링은 비워짐.
+uint16_t iq_readback_drain_all(uint8_t *buf, uint16_t buf_size);
+// I2C 리드백 스테이징(app_init.c 구현): iq_readback_drain_all() 로 i2c_tx_buf 채움.
+void     obc_stage_iq_readback(void);
+// 공용 스테이징 버퍼 접근(CLI 덤프가 재사용 — RAM 중복 방지)
+const uint8_t *obc_readback_buffer(uint16_t *len);
+// 스테이징된 리드백 프레임이 버스(SPI/I2C)로 전부 빠져나갔는가?
+//   OBC 는 0x05 만 보내고 회수 명령을 따로 보내지 않으므로, 이 관찰로 회수를 판정한다.
+bool obc_readback_consumed(void);
+
+// ─── [지상 테스트] SPI 슬레이브 진단 ────────────────────────────────────────
+//   SPI 슬레이브는 마스터가 클럭을 넣기 전엔 아무 일도 안 하므로, "무엇이 실제로
+//   들어왔는가"를 세어야 배선/클럭/프레이밍 중 어디가 문제인지 알 수 있다.
+typedef struct {
+  uint32_t bytes;       // 수신 총 바이트 (0 이면 클럭이 아예 안 들어오는 것)
+  uint32_t cs_edges;    // CS 상승 엣지 수 (0 이면 CS 배선/극성 문제)
+  uint32_t frames;      // 내용이 있는 트랜잭션 수
+  uint16_t last_len;    // 마지막 프레임 길이
+  uint8_t  last_cmd;    // 마지막 프레임 선두 바이트
+  uint16_t first_rx;    // 최초 수신 바이트 (0xFFFF = 아직 없음)
+  uint32_t overrun;     // 수신 오버런 횟수 (0 이 아니면 SPI 클럭이 너무 빠름)
+  uint16_t staged;      // 리드백 스테이징 길이
+  uint16_t tx_idx;      // 다음 송신 인덱스
+  uint8_t  cs_level;    // 현재 CS 핀 레벨 (유휴 시 1 이어야 정상)
+  uint8_t  clk_level;   // 현재 CLK 핀 레벨 (유휴 시 0)
+  uint8_t  mosi_level;  // 현재 MOSI 핀 레벨 (유휴 시 0)
+} obc_spi_stats_t;
+
+void obc_spi_get_stats(obc_spi_stats_t *s);
+void obc_spi_reset_stats(void);
+// 물리 SPI 없이 명령 처리 경로만 검증(ISR 이 하는 일을 흉내낸다).
+void obc_spi_inject(const uint8_t *frame, uint16_t len);
 
 #endif // APP_PROCESS_H

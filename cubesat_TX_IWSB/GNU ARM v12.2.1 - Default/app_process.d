@@ -192,7 +192,8 @@ app_process.o: ../app_process.c \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emdrv/nvm3/inc/nvm3_hal.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emdrv/nvm3/inc/nvm3_default.h \
  ../fw_guard.h \
- /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_usart.h
+ /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_usart.h \
+ ../iq_capture.h
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/toolchain/inc/sl_gcc_preinclude.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/legacy_hal/inc/platform-header.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_core.h:
@@ -388,3 +389,4 @@ app_process.o: ../app_process.c \
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emdrv/nvm3/inc/nvm3_default.h:
 ../fw_guard.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_usart.h:
+../iq_capture.h:

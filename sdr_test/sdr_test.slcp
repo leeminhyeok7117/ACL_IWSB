@@ -38,12 +38,16 @@ component:
 - {id: brd4253a}
 - {id: device_init}
 - {id: emlib_i2c}
+- instance: [vcom]
+  id: iostream_usart
 - {id: iostream_usart_core}
 - {id: mpu}
 - {id: radio_config_simple_rail_singlephy}
 - instance: [inst0]
   id: rail_util_init
 - {id: rail_util_recommended}
+- instance: [btn0]
+  id: simple_button
 - {id: sl_system}
 requires:
 - {name: a_radio_config}

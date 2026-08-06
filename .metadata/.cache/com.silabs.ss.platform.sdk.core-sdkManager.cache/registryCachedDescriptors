@@ -28,11 +28,11 @@
     <properties key="core.version" value="4.5.0._-1361324436"/>
     <properties key="sdk.subPropertyFiles" value="/home/lmh/SimplicityStudio/SDKs/gecko_sdk/app/bluetooth/esf.properties /home/lmh/SimplicityStudio/SDKs/gecko_sdk/app/btmesh/btmesh.properties /home/lmh/SimplicityStudio/SDKs/gecko_sdk/app/common/app_common.properties /home/lmh/SimplicityStudio/SDKs/gecko_sdk/protocol/z-wave/esf.properties /home/lmh/SimplicityStudio/SDKs/gecko_sdk/hardware/reference_design/ref_design.properties /home/lmh/SimplicityStudio/SDKs/gecko_sdk/protocol/usb/usb.properties /home/lmh/SimplicityStudio/SDKs/gecko_sdk/protocol/openthread/esf.properties /home/lmh/SimplicityStudio/SDKs/gecko_sdk/platform/micrium_os/micrium-krnx.properties /home/lmh/SimplicityStudio/SDKs/gecko_sdk/protocol/zigbee/esf.properties /home/lmh/SimplicityStudio/SDKs/gecko_sdk/app/flex/esf.properties /home/lmh/SimplicityStudio/SDKs/gecko_sdk/app/amazon/app_amazon.properties /home/lmh/SimplicityStudio/SDKs/gecko_sdk/.studio/efm32.properties /home/lmh/SimplicityStudio/SDKs/gecko_sdk/platform/halconfig/halconfig.properties /home/lmh/SimplicityStudio/SDKs/gecko_sdk/platform/bootloader/esf.properties /home/lmh/SimplicityStudio/SDKs/gecko_sdk/app/mcu_example/app_mcu.properties /home/lmh/SimplicityStudio/SDKs/gecko_sdk/hardware/kit/kit.properties /home/lmh/SimplicityStudio/SDKs/gecko_sdk/util/third_party/tensorflow_extra/apack.properties"/>
     <properties key="sdk.extensionPropertyFiles" value=""/>
-    <properties key="core.partCompatibility" value="mcu.arm.efm32.* mcu.arm.ezr32.* .*wgm16.* .*efr32[bm]g(1[bp23]|2[124]).* .*efr32(mg14).* .*bgm(1|13|21|22|24).* .*mgm(1|12|13|21|22|24).* .*efr32bg2(1|2.*f512|4).* .*efr32mg2[1247].* .*efr32[mb]g1[23]p.* .*mgm(1[23]|2[124]).* .*bgm(13|21|22.*hna|24).* .*efr32mg.* .*efr32fg.* .*efr32bg.* mcu.arm.efm32.g..* mcu.arm.efm32.gg.* mcu.arm.efm32.hg.* mcu.arm.efm32.pg.* mcu.arm.efm32.pg12.* mcu.arm.efm32.jg.* mcu.arm.efm32.jg12.* mcu.arm.efm32.lg.* mcu.arm.efm32.wg.* mcu.arm.efr32.* .*efr32m[gr].* .*zgm13.* .*efr32zg.* .*zgm23.* .*host.* .*efr32mg(12|13)p.* .*efr32mg2[1247].* .*mgm(12|13|21|22|24).* .*rm21.*"/>
+    <properties key="core.partCompatibility" value="mcu.arm.ezr32.* .*mgm(12|13|21|22|24).* mcu.arm.efm32.wg.* .*efr32[bm]g(1[bp23]|2[124]).* .*mgm(1[23]|2[124]).* mcu.arm.efm32.* .*efr32fg.* .*efr32bg.* .*zgm13.* .*efr32(mg14).* mcu.arm.efm32.pg12.* mcu.arm.efm32.jg12.* .*efr32bg2(1|2.*f512|4).* mcu.arm.efr32.* .*efr32zg.* .*wgm16.* .*efr32mg(12|13)p.* .*host.* .*bgm(1|13|21|22|24).* .*rm21.* .*bgm(13|21|22.*hna|24).* mcu.arm.efm32.gg.* mcu.arm.efm32.g..* .*efr32mg2[1247].* .*zgm23.* mcu.arm.efm32.hg.* mcu.arm.efm32.jg.* .*efr32mg.* mcu.arm.efm32.lg.* .*mgm(1|12|13|21|22|24).* .*efr32[mb]g1[23]p.* mcu.arm.efm32.pg.* .*efr32m[gr].*"/>
     <properties key="useAdditionalLibraries" value="true"/>
     <properties key="sdk.supportModules" value="true"/>
     <properties key="sdk.requiredFeatureLevel" value="esf:2;app_framework:143"/>
-    <properties key="core.boardCompatibility" value=".* .* .* .* .*"/>
+    <properties key="core.boardCompatibility" value=".*"/>
     <properties key="sdk.seFirmwareFolders" value="/home/lmh/SimplicityStudio/SDKs/gecko_sdk/util/se_release/public"/>
     <properties key="sdk.moduleDefinition" value="/home/lmh/SimplicityStudio/SDKs/gecko_sdk/meta/modules.yaml"/>
     <properties key="sdk.modulesFile" value="/home/lmh/SimplicityStudio/SDKs/gecko_sdk/.studio/modules.xml /home/lmh/SimplicityStudio/SDKs/gecko_sdk/hardware/kit/./common/module/modules.xml"/>
@@ -53,7 +53,7 @@
     <properties key="useGCCUserObjs" value="openthread"/>
     <properties key="sdk.simpleLabelWithVersion" value="Gecko SDK Suite v4.5.0"/>
     <properties key="sdk.labelWithVersion" value="Gecko SDK Suite v4.5.0: Amazon 202012.00, Bluetooth 7.4.0, Bluetooth Mesh 6.1.5, EmberZNet 7.5.1.0, Flex 3.7.7.0, MCU 6.6.7.0, Micrium OS Kernel 5.14.00, OpenThread 2.4.7.0 (GitHub-fb0446f53), Platform 4.4.7.0, USB 1.2.4.0, Z-Wave SDK 7.21.7.0"/>
-    <properties key="core.keywords" value="ble btMesh platform zwave usb openthread micrium znet flex amazon bootloader mcu"/>
+    <properties key="core.keywords" value="amazon usb flex bootloader openthread ble micrium znet btMesh zwave platform mcu"/>
     <properties key="core.scannedErrorMessage" value=""/>
     <properties key="signature_trust.requiresTrust" value="true"/>
     <properties key="signature_trust.trusted" value="true"/>

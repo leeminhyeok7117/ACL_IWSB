@@ -27,8 +27,10 @@ gecko_sdk_4.5.0/platform/bootloader/api \
 gecko_sdk_4.5.0/platform/bootloader/app_properties \
 gecko_sdk_4.5.0/platform/common/src \
 gecko_sdk_4.5.0/platform/common/toolchain/src \
+gecko_sdk_4.5.0/platform/driver/button/src \
 gecko_sdk_4.5.0/platform/driver/debug/src \
 gecko_sdk_4.5.0/platform/emdrv/dmadrv/src \
+gecko_sdk_4.5.0/platform/emdrv/gpiointerrupt/src \
 gecko_sdk_4.5.0/platform/emlib/src \
 gecko_sdk_4.5.0/platform/radio/rail_lib/plugin/pa-conversions \
 gecko_sdk_4.5.0/platform/radio/rail_lib/plugin/rail_util_protocol \

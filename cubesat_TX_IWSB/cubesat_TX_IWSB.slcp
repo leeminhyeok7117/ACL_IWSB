@@ -21,11 +21,13 @@ source:
 - {path: app_init.c}
 - {path: app_process.c}
 - {path: app_cli.c}
+- {path: iq_capture.c}
 include:
 - path: .
   file_list:
   - {path: app_init.h}
   - {path: app_process.h}
+  - {path: iq_capture.h}
 sdk: {id: gecko_sdk, version: 4.5.0}
 toolchain_settings:
 - {value: debug, option: optimize}
@@ -174,22 +176,91 @@ template_contribution:
     - {type: hexopt, help: Long Address of the child to remove}
 - name: cli_command
   priority: 0
-  value: {name: meas, handler: cli_meas_start, help: 'Start one RSSI measurement
-      campaign (frequency-hopping sweep)'}
+  value: {name: meas, handler: cli_meas_start, help: Start one RSSI measurement campaign
+      (frequency-hopping sweep)}
 - name: cli_command
   priority: 0
-  value: {name: meas_stat, handler: cli_meas_stat, help: 'Print RSSI log status/record count'}
+  value: {name: meas_stat, handler: cli_meas_stat, help: Print RSSI log status/record
+      count}
 - name: cli_command
   priority: 0
-  value: {name: meas_clear, handler: cli_meas_clear, help: 'Clear the RSSI log (reset cursor)'}
+  value: {name: meas_clear, handler: cli_meas_clear, help: Clear the RSSI log (reset
+      cursor)}
 - name: cli_command
   priority: 0
   value:
     name: meas_auto
     handler: cli_meas_auto
-    help: 'Enable/disable periodic auto sweep (arg 0/1; no arg = show state)'
+    help: Enable/disable periodic auto sweep (arg 0/1; no arg = show state)
     argument:
     - {type: uint8opt, help: '1=enable periodic sweep, 0=disable'}
+- name: cli_command
+  priority: 0
+  value:
+    name: ota_target
+    handler: cli_ota_target
+    help: Select OTA target device_id (1-4)
+    argument:
+    - {type: uint8, help: device_id}
+- name: cli_command
+  priority: 0
+  value:
+    name: ota_start
+    handler: cli_ota_start
+    help: '[TEST-ONLY] Start OTA to device_id without I2C'
+    argument:
+    - {type: uint8, help: device_id}
+- name: cli_command
+  priority: 0
+  value: {name: slave_list, handler: cli_slave_list, help: Print registered slave
+      list}
+- name: cli_command
+  priority: 0
+  value: {name: poll_status, handler: cli_poll_status, help: Force restart polling
+      cycle}
+- name: cli_command
+  priority: 0
+  value:
+    name: iq_start
+    handler: cli_iq_start
+    help: '[IQ ground test] Open IQ measurement window for dur_s seconds (replaces
+      OBC 0x05)'
+    argument:
+    - {type: uint16opt, help: Duration in seconds (default 5)}
+- name: cli_command
+  priority: 0
+  value:
+    name: iq_auto
+    handler: cli_iq_auto
+    help: '[IWSB ground test] Auto-drain batches (0/1; no arg = show state)'
+    argument:
+    - {type: uint8opt, help: '1=auto-drain ON, 0=OFF'}
+- name: cli_command
+  priority: 0
+  value: {name: spi_stat, handler: cli_spi_stat, help: '[ground test] SPI slave diagnostics'}
+- name: cli_command
+  priority: 0
+  value: {name: spi_clear, handler: cli_spi_clear, help: '[ground test] Clear SPI diagnostic counters'}
+- name: cli_command
+  priority: 0
+  value:
+    name: spi_inject
+    handler: cli_spi_inject
+    help: '[ground test] Inject an OBC command without physical SPI'
+    argument:
+    - {type: uint8, help: Command byte}
+    - {type: uint8opt, help: Optional argument byte}
+- name: cli_command
+  priority: 0
+  value: {name: iq_abort, handler: cli_iq_abort, help: '[IWSB ground test] Abort running mission'}
+- name: cli_command
+  priority: 0
+  value: {name: iq_status, handler: cli_iq_status, help: '[IQ ground test] Print queued
+      IQ record count'}
+- name: cli_command
+  priority: 0
+  value: {name: iq_dump, handler: cli_iq_dump, help: '[IQ ground test] Dump all queued
+      IQ records as CSV over UART (replaces OBC 0x06)'}
 requires:
 - {name: a_radio_config}
 configuration:

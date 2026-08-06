@@ -564,6 +564,7 @@
           <file name="libconnect-frequency-hopping-library-efr32xg1x-gcc.a" uri="studio:/sdk/protocol/flex/libs/libconnect-frequency-hopping-library-efr32xg1x-gcc.a"/>
           <file name="libconnect-packet-queue-library-efr32xg1x-gcc.a" uri="studio:/sdk/protocol/flex/libs/libconnect-packet-queue-library-efr32xg1x-gcc.a"/>
           <file name="libconnect-parent-support-library-efr32xg1x-gcc.a" uri="studio:/sdk/protocol/flex/libs/libconnect-parent-support-library-efr32xg1x-gcc.a"/>
+          <file name="libconnect-radio-stream-library-efr32xg1x-gcc.a" uri="studio:/sdk/protocol/flex/libs/libconnect-radio-stream-library-efr32xg1x-gcc.a"/>
           <file name="libconnect-stack-common-library-efr32xg1x-gcc.a" uri="studio:/sdk/protocol/flex/libs/libconnect-stack-common-library-efr32xg1x-gcc.a"/>
           <file name="libconnect-stack-counters-library-efr32xg1x-gcc.a" uri="studio:/sdk/protocol/flex/libs/libconnect-stack-counters-library-efr32xg1x-gcc.a"/>
         </folder>
@@ -844,9 +845,11 @@
   <file name="app_process.c" linked="false" uri="studio:/project/app_process.c"/>
   <file name="app_cli.c" linked="false" uri="studio:/project/app_cli.c"/>
   <file name="fw_guard.c" linked="false" uri="studio:/project/fw_guard.c"/>
+  <file name="iq_capture.c" linked="false" uri="studio:/project/iq_capture.c"/>
   <file name="app_init.h" linked="false" uri="studio:/project/app_init.h"/>
   <file name="fw_guard.h" linked="false" uri="studio:/project/fw_guard.h"/>
   <file name="app_process.h" linked="false" uri="studio:/project/app_process.h"/>
+  <file name="iq_capture.h" linked="false" uri="studio:/project/iq_capture.h"/>
   <file name="connect_create_gbl_image.bat" linked="false" uri="studio:/project/connect_create_gbl_image.bat"/>
   <file name="connect_create_gbl_image.sh" linked="false" uri="studio:/project/connect_create_gbl_image.sh"/>
   <file name="readme.md" linked="false" uri="studio:/project/readme.md"/>
@@ -942,6 +945,7 @@
   <libraryFile uri="studio:/sdk/protocol/flex/libs/libconnect-frequency-hopping-library-efr32xg1x-gcc.a"/>
   <libraryFile uri="studio:/sdk/protocol/flex/libs/libconnect-packet-queue-library-efr32xg1x-gcc.a"/>
   <libraryFile uri="studio:/sdk/protocol/flex/libs/libconnect-parent-support-library-efr32xg1x-gcc.a"/>
+  <libraryFile uri="studio:/sdk/protocol/flex/libs/libconnect-radio-stream-library-efr32xg1x-gcc.a"/>
   <libraryFile uri="studio:/sdk/protocol/flex/libs/libconnect-stack-common-library-efr32xg1x-gcc.a"/>
   <libraryFile uri="studio:/sdk/protocol/flex/libs/libconnect-stack-counters-library-efr32xg1x-gcc.a"/>
   <libraryFile uri="studio:/sdk/platform/emdrv/nvm3/lib/libnvm3_CM4_gcc.a"/>

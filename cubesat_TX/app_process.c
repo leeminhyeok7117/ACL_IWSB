@@ -50,6 +50,12 @@ static inline void log_flush(void) { while (!(USART0->STATUS & USART_STATUS_TXC)
 
 #define OBC_TARGET_TX_SELF    0x00   // START target=0 → TX 자체 펌웨어 설치
 
+// ─── [I2C 상태 보고] result 코드 (OTA 로직 미변경, 관찰자만 갱신) ────────────
+#define OTA_RPT_IDLE          0U
+#define OTA_RPT_INPROGRESS    1U
+#define OTA_RPT_SUCCESS       2U
+#define OTA_RPT_FAIL          3U
+
 // ─── FW 스트리밍 패킷 포맷 (호스트 i2c_FW_buf_t 와 동일) ─────────────────────
 //   [cc:1][packet_num:2 LE][len:1][buf_data:N]
 //   호스트 버전에 따라 N=120 또는 128 → 청크 크기를 가정하지 않고 누적 오프셋으로 처리.
@@ -376,6 +382,35 @@ void emberAfTickCallback(void)
         NVIC_SystemReset();
       }
     }
+  }
+
+  // ─── [I2C 상태 보고] ota_state를 "관찰만" 하여 보고값 갱신 (OTA 로직 불변) ──
+  //   여기서는 ota_state/gbl_*를 읽기만 하고 어떤 OTA 변수도 쓰지 않는다.
+  {
+    extern volatile uint8_t i2c_rpt_state;
+    extern volatile uint8_t i2c_rpt_result;
+    extern volatile uint8_t i2c_rpt_progress;
+    static ota_master_state_t prev_ota = OTA_IDLE;
+
+    i2c_rpt_state = (uint8_t)ota_state;
+
+    if (gbl_image_size > 0) {
+      uint32_t off = gbl_write_offset;
+      if (off > gbl_image_size) off = gbl_image_size;
+      i2c_rpt_progress = (uint8_t)((off * 100U) / gbl_image_size);
+    }
+
+    if (ota_state == OTA_ERROR) {
+      i2c_rpt_result = OTA_RPT_FAIL;                       // 실패
+    } else if (prev_ota == OTA_WAITING_BOOTLOAD && ota_state == OTA_FW_READY) {
+      i2c_rpt_result = OTA_RPT_SUCCESS;                    // RX OTA 정상 완료
+    } else if (prev_ota == OTA_WAITING_SLAVE_PREPARE && ota_state == OTA_FW_READY) {
+      i2c_rpt_result = OTA_RPT_FAIL;                       // prepare 타임아웃(RX 미응답)
+    } else if (ota_state >= OTA_WAITING_SLAVE_PREPARE
+               && ota_state <= OTA_WAITING_BOOTLOAD) {
+      i2c_rpt_result = OTA_RPT_INPROGRESS;                 // 진행 중
+    }
+    prev_ota = ota_state;
   }
 
   if (emberStackIsUp()) {

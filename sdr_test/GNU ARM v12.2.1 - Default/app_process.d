@@ -61,6 +61,14 @@ app_process.o: ../app_process.c \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_enum.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_status.h \
  /home/lmh/SimplicityStudio/v5_workspace/sdr_test/autogen/sl_iostream_handles.h \
+ /home/lmh/SimplicityStudio/v5_workspace/sdr_test/autogen/sl_iostream_init_usart_instances.h \
+ /home/lmh/SimplicityStudio/v5_workspace/sdr_test/autogen/sl_component_catalog.h \
+ /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/iostream/inc/sl_iostream_uart.h \
+ /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/iostream/inc/sl_iostream.h \
+ /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emdrv/dmadrv/inc/dmadrv.h \
+ /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emdrv/common/inc/ecode.h \
+ /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_ldma.h \
+ /home/lmh/SimplicityStudio/v5_workspace/sdr_test/config/dmadrv_config.h \
  /home/lmh/SimplicityStudio/v5_workspace/sdr_test/config/app_log_config.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/bootloader/api/btl_interface.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/bootloader/api/btl_errorcode.h \
@@ -76,7 +84,18 @@ app_process.o: ../app_process.c \
  /home/lmh/SimplicityStudio/v5_workspace/sdr_test/config/sl_i2cslave_config.h \
  /home/lmh/SimplicityStudio/v5_workspace/sdr_test/autogen/sl_rail_util_init.h \
  /home/lmh/SimplicityStudio/v5_workspace/sdr_test/config/sl_rail_util_init_inst0_config.h \
- /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/radio/rail_lib/common/rail_types.h
+ /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/radio/rail_lib/common/rail_types.h \
+ /home/lmh/SimplicityStudio/v5_workspace/sdr_test/autogen/sl_simple_button_instances.h \
+ /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/driver/button/inc/sl_simple_button.h \
+ /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/driver/button/inc/sl_button.h \
+ /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_common.h \
+ /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_assert.h \
+ /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_gpio.h \
+ /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_assert.h \
+ /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_bus.h \
+ /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_core.h \
+ /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_core_generic.h \
+ /home/lmh/SimplicityStudio/v5_workspace/sdr_test/config/emlib_core_debug_config.h
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/toolchain/inc/sl_gcc_preinclude.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_i2c.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/Device/SiliconLabs/EFR32FG12P/Include/em_device.h:
@@ -139,6 +158,14 @@ app_process.o: ../app_process.c \
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_enum.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_status.h:
 /home/lmh/SimplicityStudio/v5_workspace/sdr_test/autogen/sl_iostream_handles.h:
+/home/lmh/SimplicityStudio/v5_workspace/sdr_test/autogen/sl_iostream_init_usart_instances.h:
+/home/lmh/SimplicityStudio/v5_workspace/sdr_test/autogen/sl_component_catalog.h:
+/home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/iostream/inc/sl_iostream_uart.h:
+/home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/iostream/inc/sl_iostream.h:
+/home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emdrv/dmadrv/inc/dmadrv.h:
+/home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emdrv/common/inc/ecode.h:
+/home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_ldma.h:
+/home/lmh/SimplicityStudio/v5_workspace/sdr_test/config/dmadrv_config.h:
 /home/lmh/SimplicityStudio/v5_workspace/sdr_test/config/app_log_config.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/bootloader/api/btl_interface.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/bootloader/api/btl_errorcode.h:
@@ -155,3 +182,14 @@ app_process.o: ../app_process.c \
 /home/lmh/SimplicityStudio/v5_workspace/sdr_test/autogen/sl_rail_util_init.h:
 /home/lmh/SimplicityStudio/v5_workspace/sdr_test/config/sl_rail_util_init_inst0_config.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/radio/rail_lib/common/rail_types.h:
+/home/lmh/SimplicityStudio/v5_workspace/sdr_test/autogen/sl_simple_button_instances.h:
+/home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/driver/button/inc/sl_simple_button.h:
+/home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/driver/button/inc/sl_button.h:
+/home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_common.h:
+/home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_assert.h:
+/home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_gpio.h:
+/home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/inc/sl_assert.h:
+/home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_bus.h:
+/home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_core.h:
+/home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_core_generic.h:
+/home/lmh/SimplicityStudio/v5_workspace/sdr_test/config/emlib_core_debug_config.h:

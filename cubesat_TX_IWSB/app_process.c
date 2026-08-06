@@ -34,9 +34,20 @@
 #include "nvm3_default.h"
 #include "fw_guard.h"
 #include "em_usart.h"
+#include "sl_power_manager.h"   // [IQ] 측정 중 sleep 차단(RX 와 타이밍 정합)
+#include "iq_capture.h"   // [IQ] RAIL IQ 캡처 코어 + IQ 리포트 프로토콜
 
 // [디버깅] VCOM(USART0) TX가 다 빠질 때까지 대기 → 로그 즉시 표시(sleep로 갇힘 방지)
-static inline void log_flush(void) { while (!(USART0->STATUS & USART_STATUS_TXC)) {} }
+//   ★ 비행 안전: 무한 대기 금지. VCOM 이 비활성이거나 USART0 클럭이 꺼진 빌드에서는
+//     TXC 가 영원히 서지 않아 이 자리에서 완전히 멈춘다(재부팅 외 복구 불가).
+//     최대 대기 횟수를 둬서 어떤 경우에도 반드시 빠져나오게 한다.
+//     (115200bps 기준 1바이트 ≈ 87us. 100k 회전이면 넉넉히 상한을 넘긴다.)
+static inline void log_flush(void)
+{
+  for (uint32_t guard = 0; guard < 100000U; guard++) {
+    if (USART0->STATUS & USART_STATUS_TXC) return;
+  }
+}
 
 // -----------------------------------------------------------------------------
 //                              Macros and Typedefs
@@ -46,6 +57,8 @@ static inline void log_flush(void) { while (!(USART0->STATUS & USART_STATUS_TXC)
 #define OBC_CMD_FW_UPDATE     0x02   // FW 이미지 스트리밍 패킷
 #define OBC_CMD_ERASE         0x03   // 스토리지 슬롯 erase
 #define OBC_CMD_START         0x04   // OTA 트리거 [cc][target] target:0=TX자체,1~4=RX
+#define OBC_CMD_IQ_START      0x05   // IQ 측정 캠페인 트리거 [cc][dur_s] (dur_s초 동안 반복)
+#define OBC_CMD_IQ_READ       0x06   // IQ 레코드 1건 리드백 준비(이후 OBC 가 I2C read)
 #define OBC_CMD_DUMMY         0x00   // 호스트 dummy write (무시)
 
 #define OBC_TARGET_TX_SELF    0x00   // START target=0 → TX 자체 펌웨어 설치
@@ -88,6 +101,8 @@ static void handle_cmd_fw_packet(const uint8_t *buf, uint16_t len);
 static void handle_cmd_erase(const uint8_t *buf, uint16_t len);
 static void handle_cmd_data(const uint8_t *buf, uint16_t len);
 static void handle_cmd_start(const uint8_t *buf, uint16_t len);
+static void handle_cmd_iq_start(const uint8_t *buf, uint16_t len);   // [IQ]
+static void handle_cmd_iq_read(const uint8_t *buf, uint16_t len);    // [IQ]
 static void send_slave_prepare_msg(EmberNodeId target);
 static void ota_state_machine_tick(void);
 static void start_ota_distribution(void);
@@ -115,6 +130,7 @@ extern volatile ota_master_state_t ota_state;
 extern volatile uint8_t  obc_rx_buffer[];
 extern volatile uint16_t obc_rx_len;
 extern volatile bool     obc_cmd_ready;
+extern volatile uint16_t obc_cmd_len;
 extern uint32_t    gbl_image_size;
 extern uint32_t    gbl_write_offset;
 extern uint8_t     ota_image_tag;
@@ -294,15 +310,34 @@ void rssi_log_clear(void)
 // -----------------------------------------------------------------------------
 typedef enum {
   MEAS_TX_IDLE = 0,
-  MEAS_TX_ROUND_CMD,   // MEAS_CMD 송신 + 채널 전환
+  MEAS_TX_ROUND_CMD,   // MEAS_CMD 브로드캐스트 송신(채널 전환은 아직 안 함)
+  MEAS_TX_CMD_WAIT,    // ★ 방송이 실제 전파로 나갈 시간 확보 후 채널 전환
   MEAS_TX_ON_CHANNEL,  // 비콘 송신(t==TX) 또는 청취
   MEAS_TX_COLLECT      // home 복귀 후 리포트 수집
 } meas_tx_state_t;
 
+// ★ emberMessageSend() 는 큐에 넣고 즉시 반환한다(비동기). 송신이 실제로 끝나기
+//   전에 채널을 바꾸면 그 브로드캐스트가 유실되거나 엉뚱한 채널로 나간다.
+//   → 리스너들이 MEAS_CMD 를 못 받아 홈 채널에 남고, TX 만 측정 채널로 떠나
+//     서로 만나지 못한다(측정 실패 + 부모 부재로 인식되어 재가입 유발).
+//   CSMA/백오프까지 감안한 여유를 두고 채널을 전환한다.
+#define MEAS_CMD_TX_MS   30U
+
 static meas_tx_state_t meas_tx_state = MEAS_TX_IDLE;
 static uint8_t   meas_tx_t        = 0;   // 현재 송신원 device_id (0=TX)
-static uint8_t   meas_tx_ch       = 0;   // 현재 채널
+static uint8_t   meas_tx_ch       = 0;   // 현재 채널(리스트에서 선택된 실제 값)
+static uint8_t   meas_tx_chi      = 0;   // 현재 채널 인덱스(meas_ch_list 안)
 static uint8_t   meas_tx_seq      = 0;   // 라운드 시퀀스(증가)
+
+// [IQ] 스윕할 채널 목록(축소판) — 21채널 전부 대신 대표 채널만.
+//   한 스윕 레코드 수 = 20링크 × N채널. 링버퍼(IQ_RING_LEN-1)에 다 담기게 개수 조정.
+//   채널 플랜: base 915MHz + 0.65MHz 간격 (rail_config.c) → 채널 N = 915 + N*0.65 MHz.
+//   아래 5채널 = 915.0 / 918.25 / 921.5 / 924.75 / 928.0 MHz (915 대역 전체에 분포).
+//   한 스윕 = 20링크 × 5채널 = 100 레코드(약 19초). 링버퍼(127칸)에 전부 수용.
+//   원하는 채널로 자유롭게 바꿀 수 있음(0..20 범위).
+//   ※ 채널 수를 늘리면 20×N ≤ IQ_RING_LEN-1(127) 을 유지할 것.
+static const uint8_t meas_ch_list[] = { 0U, 5U, 10U, 15U, 20U };
+#define MEAS_N_CHANNELS  ((uint8_t)(sizeof(meas_ch_list) / sizeof(meas_ch_list[0])))
 static uint16_t  meas_tx_home     = 0;
 static uint32_t  meas_tx_t0       = 0;   // 윈도/수집 시작 tick
 static uint32_t  meas_tx_lastbcn  = 0;
@@ -311,10 +346,106 @@ static int32_t   meas_tx_rssi_sum = 0;   // TX 자신이 청취한 누적
 static uint16_t  meas_tx_rssi_cnt = 0;
 static int8_t    meas_tx_last_lqi = 0;
 
+// [IQ] TX 자신이 청취자일 때의 캡처 버퍼(rx_id=0=TX).
+static iq_sample_t meas_tx_iq_buf[IQ_SAMPLES_PER_LINK];
+static uint16_t    meas_tx_iq_n   = 0;
+static bool        meas_tx_iq_done = false;
+
+// ─── [IQ] 연속 송신(TX stream) 상태 ─────────────────────────────────────────
+//   ★ 안전 최우선: 스트림이 켜진 채로 남으면 그 채널을 계속 점유(재밍)한다.
+//     따라서 stop 은 슬롯 종료·중단·OTA 선점 등 모든 경로에서 무조건 호출하고,
+//     idempotent(이미 꺼져 있으면 무해)하게 만든다.
+static bool meas_tx_streaming = false;
+
+// ─── [안전장치] 송신 스트림 감시 타이머 ──────────────────────────────────────
+//   스트림의 시작/정지는 tick 이 담당한다. 그런데 tick 이 오래 굶으면(예: CLI
+//   iq_dump 가 수천 줄을 UART 로 뱉는 동안, 혹은 다른 긴 블로킹 작업) 스트림이
+//   정지 시점을 놓치고 계속 송신한다. 그러면 Connect MAC 이 아무것도 보내지
+//   못해 송신 큐가 가득 차고, 이후 모든 전송이 0x39(MAC_TRANSMIT_QUEUE_FULL)로
+//   영구히 실패한다 — 실제로 발생했던 장애다.
+//   tick 에 의존하지 않는 sleeptimer 콜백(인터럽트 문맥)으로 강제 정지시킨다.
+#define MEAS_STREAM_GUARD_MS   400U   // 정상 스트림 길이(210ms)의 약 2배
+static sl_sleeptimer_timer_handle_t meas_stream_guard;
+static volatile bool meas_stream_guard_armed = false;
+static volatile bool meas_stream_guard_fired = false;
+
+static void meas_stream_guard_cb(sl_sleeptimer_timer_handle_t *handle, void *data)
+{
+  (void)handle; (void)data;
+  iq_stream_abort();               // 최소 조치: 송신만 즉시 멈춘다(ISR 안전)
+  meas_stream_guard_fired = true;  // 채널 원복/수신 재개는 tick 이 수행
+}
+
+static void meas_tx_stream_start(uint8_t channel)
+{
+  if (meas_tx_streaming) return;
+  // RAIL 레벨 PN9 스트림(스택 상태 검사 없음 — iq_capture.h 주석 참조).
+  if (iq_stream_start(channel)) {
+    meas_tx_streaming = true;
+    // tick 이 굶어도 반드시 꺼지도록 감시 타이머 무장.
+    if (sl_sleeptimer_start_timer_ms(&meas_stream_guard, MEAS_STREAM_GUARD_MS,
+                                     meas_stream_guard_cb, NULL, 0, 0)
+        == SL_STATUS_OK) {
+      meas_stream_guard_armed = true;
+    }
+  } else {
+    app_log_error("[MEAS] TX stream start failed (ch=%u)\n", (unsigned)channel);
+  }
+}
+
+static void meas_tx_stream_stop(void)
+{
+  if (meas_stream_guard_armed) {
+    sl_sleeptimer_stop_timer(&meas_stream_guard);
+    meas_stream_guard_armed = false;
+  }
+  if (!meas_tx_streaming) return;
+  // 중지 후 같은 측정 채널에서 수신 재개(슬롯 종료 시 호출측이 home 으로 복귀).
+  iq_stream_stop(meas_tx_ch & 0x7FU);
+  meas_tx_streaming = false;
+}
+
 // 자동 모드: 캠페인을 주기적으로 반복(날개 전개를 시간에 따라 추적).
-static bool      meas_auto_enabled = true;    // 기본 ON (계속 측정)
+//   [IQ 전환] 기본 OFF — 측정은 OBC 의 OBC_CMD_IQ_START(지속시간) 로 트리거한다.
+static bool      meas_auto_enabled = false;   // 기본 OFF (OBC 트리거 기반)
 static uint32_t  meas_last_end_tick = 0;      // 마지막 캠페인 종료 tick (간격 측정용)
 static bool      meas_first_run     = true;   // 부팅 후 첫 자동 시작 즉시 허용
+
+// [IQ] OBC 트리거 측정 윈도: 지정 지속시간 동안 캠페인을 백투백으로 반복.
+static bool      iq_win_active   = false;
+static uint32_t  iq_win_deadline = 0;         // 스윕 강제 중단 마감시한 tick
+
+// ─── [IQ] 캠페인 동안 tick 고속 유지 ────────────────────────────────────────
+//   ★ EM1 요구만으로는 부족하다. EM1 은 "깊은 잠(EM2)"만 막을 뿐, CPU 는 여전히
+//     다음 인터럽트까지 얕은 잠을 잔다. TX 를 깨우는 것은 하트비트(2000ms)뿐이라
+//     상태 전이 1회에 최대 2초가 걸린다 → 한 라운드(상태 4단계)에 최대 8초,
+//     25라운드면 200초. 실측에서 30초 안에 3~4라운드밖에 못 돈 이유가 이것.
+//   → 측정 동안만 MEAS_TICK_MS 주기 타이머로 CPU 를 강제로 깨워 상태머신이
+//     설계대로(250ms 슬롯 / 500ms 수집) 진행하도록 보장한다.
+//     (RX 의 미가입-시 1초 웨이크업 타이머와 같은 기법, 주기만 훨씬 짧게)
+#define MEAS_TICK_MS   10U
+
+static bool      meas_tx_no_sleep_req = false;
+static sl_sleeptimer_timer_handle_t meas_tx_wake_timer;
+
+static void meas_tx_wake_cb(sl_sleeptimer_timer_handle_t *h, void *d)
+{
+  (void)h; (void)d;   // 빈 콜백 — CPU 를 깨우는 것 자체가 목적
+}
+
+static void meas_tx_set_sleep_block(bool block)
+{
+  if (block && !meas_tx_no_sleep_req) {
+    sl_power_manager_add_em_requirement(SL_POWER_MANAGER_EM1);
+    sl_sleeptimer_start_periodic_timer_ms(&meas_tx_wake_timer, MEAS_TICK_MS,
+                                          meas_tx_wake_cb, NULL, 0, 0);
+    meas_tx_no_sleep_req = true;
+  } else if (!block && meas_tx_no_sleep_req) {
+    sl_sleeptimer_stop_timer(&meas_tx_wake_timer);
+    sl_power_manager_remove_em_requirement(SL_POWER_MANAGER_EM1);
+    meas_tx_no_sleep_req = false;
+  }
+}
 
 // 콜백에서 들어온 레코드를 tick 에서 flash 에 기록하기 위한 소형 큐
 // (콜백 컨텍스트에서 flash erase/write 금지 → tick 에서 drain).
@@ -342,7 +473,147 @@ static void meas_recq_push(uint8_t tx_id, uint8_t rx_id, uint8_t ch,
   meas_recq_head = next;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+//  [IQ] Master 집계 저장소 — 완성된 링크 IQ 레코드 링 버퍼 (OBC 가 I2C로 드레인)
+//
+//   경로: 청취 노드 → (프래그먼트 IQ_REPORT) → TX 조립(iq_asm) → 완성 시 링에 push.
+//         OBC 가 OBC_CMD_IQ_READ(06) 한 번으로 쌓인 전체를 한 덩어리로 회수한다.
+//   RAM: 레코드 261B × RING 32 ≈ 8.4KB (FG12 RAM 256KB → 여유).
+//   IQ_RING_LEN 은 iq_capture.h 에 정의(리드백 버퍼 크기 계산과 공유).
+// ─────────────────────────────────────────────────────────────────────────────
+static uint8_t          iq_batch_seq = 0;   // 배치 일련번호(리드백 헤더 buf[6])
+static iq_record_t      iq_ring[IQ_RING_LEN];
+static volatile uint8_t iq_ring_head = 0;   // push 위치
+static volatile uint8_t iq_ring_tail = 0;   // pop 위치
+
+// 청취자(rx_id)별 프래그먼트 조립 버퍼. rx_id: 0=TX, 1..MAX_SLAVES=RX.
+static iq_record_t      iq_asm[MAX_SLAVES + 1U];
+static uint8_t          iq_asm_mask[MAX_SLAVES + 1U];   // 수신한 frag 비트마스크
+static uint8_t          iq_asm_nfrag[MAX_SLAVES + 1U];  // 기대 frag 수
+
+static uint8_t iq_ring_count(void)
+{
+  return (uint8_t)((iq_ring_head - iq_ring_tail) & (uint8_t)(IQ_RING_LEN - 1U));
+}
+
+// 링을 즉시 비운다(배치 회수 포기 시 등).
+void iq_ring_reset(void)
+{
+  iq_ring_tail = iq_ring_head;
+}
+
+// 완성 레코드를 링에 push(가득 차면 가장 오래된 것을 덮어써 최신 유지).
+static void iq_ring_push(const iq_record_t *rec)
+{
+  iq_ring[iq_ring_head] = *rec;
+  iq_ring_head = (uint8_t)((iq_ring_head + 1U) & (uint8_t)(IQ_RING_LEN - 1U));
+  if (iq_ring_head == iq_ring_tail) {   // overrun → tail 전진(가장 오래된 폐기)
+    iq_ring_tail = (uint8_t)((iq_ring_tail + 1U) & (uint8_t)(IQ_RING_LEN - 1U));
+  }
+}
+
+// [I2C] 쌓인 IQ 레코드 "전부"를 한 프레임으로 직렬화하여 buf 에 채운다(app_init.c 호출).
+//   프레임: [n_records:1] + 레코드들(각 IQ_REC_SIZE 고정)
+//           레코드 = [tx_id][rx_id][ch][seq][n_samp][iq: IQ_SAMPLES_PER_LINK*4]
+//           (유효 샘플은 n_samp 개, 나머지는 0 패딩 → 레코드 크기 고정으로 OBC 파싱 단순)
+//   호출 후 링은 비워진다(전부 pop). 반환값 = 항상 IQ_READBACK_MAX(고정 길이).
+//   ★ OBC 는 06 write 후 read 한 번으로 IQ_READBACK_MAX 바이트를 통째로 받고,
+//     맨 앞 [n_records] 만큼만 파싱하면 된다(뒤는 0).
+uint16_t iq_readback_drain_all(uint8_t *buf, uint16_t buf_size)
+{
+  if (buf == NULL || buf_size < IQ_READBACK_MAX) return 0;
+  memset(buf, 0, IQ_READBACK_MAX);
+
+  // ── 상태 헤더(사이클 완료 플래그) — iq_capture.h 프레임 정의 참조 ──────────
+  buf[0] = IQ_FRAME_MAGIC;
+  buf[1] = iq_mission_is_active();
+  buf[2] = (uint8_t)iq_mission_sweeps_done();
+  buf[3] = (uint8_t)IQ_MISSION_SWEEPS;
+  buf[4] = iq_mission_batch_ready();
+  // buf[5] = n_records  (아래에서 채움)
+
+  uint8_t  n   = 0;
+  uint16_t off = IQ_FRAME_HDR;
+  while (iq_ring_count() > 0U && n < (uint8_t)(IQ_RING_LEN - 1U)) {
+    const iq_record_t *r = &iq_ring[iq_ring_tail];
+    iq_ring_tail = (uint8_t)((iq_ring_tail + 1U) & (uint8_t)(IQ_RING_LEN - 1U));
+
+    uint8_t ns = (r->n_samp > IQ_SAMPLES_PER_LINK) ? (uint8_t)IQ_SAMPLES_PER_LINK
+                                                   : r->n_samp;
+    buf[off + 0] = r->tx_id;
+    buf[off + 1] = r->rx_id;
+    buf[off + 2] = r->channel;
+    buf[off + 3] = r->seq;
+    buf[off + 4] = ns;
+    for (uint8_t k = 0; k < ns; k++) {
+      uint8_t *p = &buf[off + IQ_REC_HDR + k * 4U];
+      p[0] = (uint8_t)((uint16_t)r->iq[k].i & 0xFF);
+      p[1] = (uint8_t)(((uint16_t)r->iq[k].i >> 8) & 0xFF);
+      p[2] = (uint8_t)((uint16_t)r->iq[k].q & 0xFF);
+      p[3] = (uint8_t)(((uint16_t)r->iq[k].q >> 8) & 0xFF);
+    }
+    off += IQ_REC_SIZE;                    // 고정 스트라이드(빈 샘플은 0 패딩)
+    n++;
+  }
+  buf[5] = n;                              // 레코드 개수 기록
+  buf[6] = ++iq_batch_seq;                 // 배치 일련번호 — OBC 가 새 배치인지 구분
+  buf[7] = 0;                              // 예약
+  // ★ 여기서 iq_batch_taken() 을 부르지 않는다.
+  //   이 함수는 "링 → 프레임 버퍼로 옮겼다"는 뜻일 뿐, OBC 가 데이터를 정상
+  //   수신했다는 뜻이 아니다. 회수 완료 판정은 OBC 가 0x06 을 보내줬을 때만
+  //   내린다 — 그래야 OBC 가 읽고 검증하기 전에 덮어쓰지 않는다.
+  return IQ_READBACK_MAX;
+}
+
+uint8_t iq_readback_count(void) { return iq_ring_count(); }
+
+// [IQ] 청취자 프래그먼트 리포트 조립(콜백에서 호출).
+//   payload: [1]seq [2]tx_id [3]ch [4]rx_id [5]frag_idx [6]n_frags [7]n_samp [8..]iq
+static void meas_tx_on_iq_report(const uint8_t *p, uint8_t len)
+{
+  if (len < IQ_REPORT_HDR) return;
+  uint8_t rx_id     = p[4];
+  uint8_t frag_idx  = p[5];
+  uint8_t n_frags   = p[6];
+  uint8_t nsamp     = p[7];
+  if (rx_id > MAX_SLAVES || frag_idx >= 8U || n_frags == 0U || n_frags > 8U) return;
+  if ((uint16_t)(IQ_REPORT_HDR + nsamp * 4U) > len) return;   // 길이 정합성
+
+  iq_record_t *a = &iq_asm[rx_id];
+  if (frag_idx == 0U) {          // 새 조립 시작
+    a->tx_id   = p[2];
+    a->rx_id   = rx_id;
+    a->channel = p[3];
+    a->seq     = p[1];
+    a->n_samp  = 0U;
+    iq_asm_mask[rx_id]  = 0U;
+    iq_asm_nfrag[rx_id] = n_frags;
+  }
+  // 조립 일관성: seq 가 바뀌었으면(라운드 교체) 이전 조각 폐기 후 재시작.
+  if (a->seq != p[1] || iq_asm_nfrag[rx_id] != n_frags) {
+    return;   // 어긋난 조각 무시(다음 frag_idx==0 에서 재동기화)
+  }
+
+  uint16_t off = (uint16_t)frag_idx * IQ_FRAG_SAMPLES;
+  for (uint8_t k = 0; k < nsamp && (off + k) < IQ_SAMPLES_PER_LINK; k++) {
+    const uint8_t *s = &p[IQ_REPORT_HDR + k * 4U];
+    a->iq[off + k].i = (int16_t)((uint16_t)s[0] | ((uint16_t)s[1] << 8));
+    a->iq[off + k].q = (int16_t)((uint16_t)s[2] | ((uint16_t)s[3] << 8));
+  }
+  uint16_t end = off + nsamp;
+  if (end > IQ_SAMPLES_PER_LINK) end = IQ_SAMPLES_PER_LINK;
+  if (end > a->n_samp) a->n_samp = (uint8_t)end;
+
+  iq_asm_mask[rx_id] |= (uint8_t)(1U << frag_idx);
+  uint8_t full = (uint8_t)((1U << n_frags) - 1U);
+  if ((iq_asm_mask[rx_id] & full) == full) {   // 모든 조각 도착 → 링에 확정
+    iq_ring_push(a);
+    iq_asm_mask[rx_id] = 0U;   // 재조립 방지
+  }
+}
+
 // 리스너의 MEAS_REPORT 적재(콜백에서 호출). p: [1]seq [2]tx_id [3]ch [4]rx_id [5]rssi [6]lqi [7]cnt
+__attribute__((unused))
 static void meas_tx_on_report(const uint8_t *p, uint8_t len)
 {
   if (len < 8) return;
@@ -373,16 +644,20 @@ void meas_campaign_start(void)
     app_log_info("[MEAS] OTA busy — campaign deferred.\n");
     return;                                      // OTA 중엔 측정 금지
   }
-  if (!rssi_log_ready()) {
-    app_log_error("[MEAS] flash log not ready — campaign aborted.\n");
+  // [IQ 전환] IQ 측정은 외부 플래시를 쓰지 않는다(결과는 RAM 링→OBC I2C).
+  //   rssi_log_ready() 여부와 무관하게 진행. (RSSI 병행 로깅은 여전히 flash 사용)
+  if (!iq_capture_ready()) {
+    app_log_error("[MEAS] IQ capture not ready (RAIL handle) — campaign aborted.\n");
     return;
   }
-  meas_tx_t  = MEAS_TX_DEVICE_ID;   // 첫 송신원 = TX 자신
-  meas_tx_ch = MEAS_CH_FIRST;
+  meas_tx_t   = MEAS_TX_DEVICE_ID;   // 첫 송신원 = TX 자신
+  meas_tx_chi = 0;                   // 첫 채널 = 리스트[0]
+  meas_tx_ch  = meas_ch_list[0];
   meas_tx_seq++;
+  meas_tx_set_sleep_block(true);     // 캠페인 동안 tick 고속 유지(RX 와 타이밍 정합)
   meas_tx_state = MEAS_TX_ROUND_CMD;
-  app_log_info("[MEAS] campaign start (t=0..%u, ch=%u..%u)\n",
-               (unsigned)MAX_SLAVES, (unsigned)MEAS_CH_FIRST, (unsigned)MEAS_CH_LAST);
+  app_log_info("[MEAS] campaign start (t=0..%u, channels=%u)\n",
+               (unsigned)MAX_SLAVES, (unsigned)MEAS_N_CHANNELS);
 }
 
 static void meas_tx_send_cmd(void)
@@ -395,6 +670,9 @@ static void meas_tx_send_cmd(void)
                    sizeof(cmd), cmd, EMBER_OPTIONS_NONE);
 }
 
+// [구] 단발 비콘 송신 — 연속 송신(TX stream) 전환으로 더 이상 쓰지 않는다.
+//   (참고용 보존: RSSI 병행 측정을 되살릴 때 재사용 가능)
+__attribute__((unused))
 static void meas_tx_send_beacon(uint8_t idx)
 {
   uint8_t msg[5] = {
@@ -408,18 +686,23 @@ static void meas_tx_send_beacon(uint8_t idx)
 // 다음 (t,ch) 라운드로 진행(채널 먼저 스윕, 끝나면 송신원 증가). 끝이면 IDLE.
 static void meas_tx_advance(void)
 {
-  if (meas_tx_ch < MEAS_CH_LAST) {
-    meas_tx_ch++;
+  if (meas_tx_chi + 1U < MEAS_N_CHANNELS) {
+    meas_tx_chi++;                     // 리스트 내 다음 채널
+    meas_tx_ch = meas_ch_list[meas_tx_chi];
   } else {
-    meas_tx_ch = MEAS_CH_FIRST;
-    meas_tx_t++;
+    meas_tx_chi = 0;                   // 채널 다 돌면 처음으로
+    meas_tx_ch  = meas_ch_list[0];
+    meas_tx_t++;                       // 다음 송신원
   }
   meas_tx_seq++;
   if (meas_tx_t > MAX_SLAVES) {     // 0..MAX_SLAVES 송신원 모두 완료
     meas_tx_state      = MEAS_TX_IDLE;
+    meas_tx_set_sleep_block(false);   // 저전력 복귀
     meas_last_end_tick = sl_sleeptimer_get_tick_count();   // 자동 재시작 간격 기준
-    app_log_info("[MEAS] campaign done. records=%lu\n",
-                 (unsigned long)rssi_log_count());
+    // ※ 여기서 찍던 rssi_log_count() 는 (지금 비활성인) 외부플래시 RSSI 로그
+    //   개수라 IQ 와 무관하게 항상 0 이어서 오해를 샀다 → IQ 개수로 교체.
+    app_log_info("[MEAS] sweep complete. IQ records=%u\n",
+                 (unsigned)iq_readback_count());
   } else {
     meas_tx_state = MEAS_TX_ROUND_CMD;
   }
@@ -434,13 +717,17 @@ static bool meas_tx_ota_busy(void)
 }
 
 // 캠페인을 즉시 중단하고 홈 채널로 안전 복귀(OTA 가 끼어들 때 호출).
+// 캠페인 즉시 중단 + 홈 채널 안전 복귀. (OTA 선점 / 마감시한 초과 공통 경로)
 static void meas_tx_abort(void)
 {
   if (meas_tx_state == MEAS_TX_IDLE) return;
-  emberSetRadioChannel(meas_tx_home);   // 측정 채널에 갇히지 않도록 복귀(home 기본 0)
+  meas_tx_stream_stop();   // ★ 최우선: 스트림이 켜진 채 남으면 채널을 계속 점유한다
+  emberSetRadioChannelExtended(meas_tx_home, false);   // 측정 채널에 갇히지 않도록 복귀(home 기본 0)
   meas_tx_state      = MEAS_TX_IDLE;
+  meas_tx_set_sleep_block(false);   // 저전력 복귀
   meas_last_end_tick = sl_sleeptimer_get_tick_count();
-  app_log_info("[MEAS] aborted (OTA busy). returned to home channel.\n");
+  // 사유는 호출측이 별도로 로그한다(OTA 선점/마감시한 등) — 여기선 사실만 기록.
+  app_log_info("[MEAS] campaign aborted. returned to home channel.\n");
 }
 
 // 자동 모드: 스택 up + 비-OTA + 간격 경과 시 다음 캠페인 시작.
@@ -463,6 +750,217 @@ void meas_auto_set(bool en)
   if (en) meas_first_run = true;   // 켜면 즉시 1회 시작 허용
 }
 bool meas_auto_get(void) { return meas_auto_enabled; }
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  [IWSB 미션] OBC 가 명령 하나(0x05)를 주면 전 과정을 자동 수행한다.
+//
+//   1) 먼저 수집 버퍼가 비어 있는지 확인 — 안 비었으면 아직 회수 안 된 데이터가
+//      있다는 뜻이므로 시작하지 않는다(덮어써서 잃는 것을 방지).
+//   2) 비어 있으면 스윕을 IQ_MISSION_SWEEPS(100) 회 반복한다.
+//   3) ★ 한 스윕이 끝날 때마다 그 배치를 OBC 로 내려보낸다. 100회분(약 2.6MB)을
+//      한꺼번에 담을 RAM 이 없으므로 "한 스윕 = 한 배치" 단위로 흘려보낸다.
+//   4) 배치를 OBC 가 가져갈 때까지 다음 스윕을 시작하지 않는다(유실 방지).
+//      단 OBC 가 영영 안 가져가면 미션이 멈추므로 대기 상한을 둔다.
+//
+//   ※ EFR32 는 SPI 슬레이브라 스스로 전송을 시작할 수 없다. 따라서 "내려보낸다"는
+//     것은 "배치를 즉시 회수 가능한 상태로 준비해 두고, OBC 가 폴링해서 가져간다"
+//     는 의미다. 준비 여부/남은 스윕 수는 프레임 헤더에 실어 OBC 가 알 수 있다.
+// ─────────────────────────────────────────────────────────────────────────────
+//   ※ IQ_MISSION_SWEEPS 는 app_process.h 에 정의(리드백 프레임 헤더와 공유).
+#define IQ_SWEEP_DEADLINE_S    60U      // 스윕 1회가 이 시간을 넘으면 강제 중단
+#define IQ_BATCH_PICKUP_MS     30000U   // 배치 회수 대기 상한(초과 시 버리고 계속)
+#define IQ_START_WAIT_MS       180000U  // 스윕 시작 대기 상한(OTA/조인 대기) — 초과 시 미션 포기
+
+// ★ sl_sleeptimer_ms_to_tick() 의 인자는 uint16_t 다(최대 65535 ms).
+//   이 값을 65 초 넘게 올리면 인자가 조용히 잘려 마감시한이 엉뚱하게 짧아지고
+//   모든 스윕이 즉시 중단된다. 컴파일 단계에서 막는다.
+//   (PICKUP/START_WAIT 는 tick_to_ms 비교라 64비트 내부연산 → 영향 없음)
+_Static_assert(IQ_SWEEP_DEADLINE_S * 1000U <= 65535U,
+               "IQ_SWEEP_DEADLINE_S too large for sl_sleeptimer_ms_to_tick(uint16_t)");
+
+static bool     iq_mission_active = false;
+static uint16_t iq_sweeps_done    = 0;      // 완료한 스윕 수
+static bool     iq_batch_ready    = false;  // 회수 대기 중인 배치가 있는가
+static uint32_t iq_batch_tick     = 0;      // 배치가 준비된 시각(대기 상한 판정용)
+static uint32_t iq_wait_tick      = 0;      // 스윕 시작을 기다리기 시작한 시각
+static bool     iq_wait_logged    = false;  // 대기 사유 로그 1회만 출력
+
+// [지상 테스트 전용] 배치 자동 회수.
+//   실제 OBC 는 0x06 폴링으로 배치를 가져가므로 사람 개입이 없다. CLI 시험에서는
+//   사람이 iq_dump 를 대신 쳐야 하는데 100 스윕이면 100번이라 현실적이지 않다.
+//   이 플래그를 켜면 tick 이 배치를 자동 회수하고 스윕당 한 줄만 요약 출력한다.
+//   ※ 비행 기본값은 OFF — OBC 가 회수하기 전에 데이터를 버리면 안 되기 때문이다.
+static bool iq_auto_drain = false;
+void iq_auto_drain_set(bool on) { iq_auto_drain = on; }
+bool iq_auto_drain_get(void)    { return iq_auto_drain; }
+
+uint8_t  iq_mission_is_active(void) { return iq_mission_active ? 1U : 0U; }
+uint16_t iq_mission_sweeps_done(void) { return iq_sweeps_done; }
+uint8_t  iq_mission_batch_ready(void) { return iq_batch_ready ? 1U : 0U; }
+
+// OBC(또는 CLI)가 배치를 실제로 가져갔을 때 호출 — 다음 스윕 진행을 허가한다.
+void iq_batch_taken(void)
+{
+  iq_batch_ready = false;
+}
+
+// 스윕 1회 시작 시도. 전제조건이 안 맞으면 아무것도 바꾸지 않고 false 를 돌려주어
+// 다음 tick 에서 재시도하게 한다. (조건을 미리 확인하므로 tick 마다 로그가 도배되지 않음)
+static bool iq_start_sweep(uint32_t now)
+{
+  if (!emberStackIsUp() || meas_tx_ota_busy() || !iq_capture_ready()) return false;
+  meas_campaign_start();
+  if (!meas_campaign_active()) return false;   // 시작 실패(다른 캠페인 진행 중 등)
+
+  iq_win_deadline = now + sl_sleeptimer_ms_to_tick(IQ_SWEEP_DEADLINE_S * 1000U);
+  iq_win_active   = true;
+  iq_wait_logged  = false;
+  return true;
+}
+
+// [IWSB 미션 시작] OBC 0x05 / CLI iq_start 진입점.
+//   dur_s 인자는 하위호환을 위해 남겨두되 미션 모드에서는 쓰지 않는다.
+//
+//   ★ 정책: "5 는 어떤 상황에서든 미션 1회를 온전히 수행한다."
+//     - 링에 남은 이전 데이터가 있으면 → 버리고 새로 시작(회수 실패한 찌꺼기).
+//     - 아직 스윕을 시작할 수 없는 상황(OTA 중/미조인)이면 → 거부하지 않고 예약해
+//       두고, 조건이 풀리는 즉시 iq_win_tick() 이 자동으로 시작한다.
+void iq_meas_trigger(uint16_t dur_s)
+{
+  (void)dur_s;
+
+  if (iq_mission_active) {
+    app_log_info("[IWSB] already running (%u/%u sweeps)\n",
+                 (unsigned)iq_sweeps_done, (unsigned)IQ_MISSION_SWEEPS);
+    return;
+  }
+  // 이전 미션의 잔여 레코드는 새 미션 데이터와 섞이면 안 되므로 비우고 시작한다.
+  uint8_t stale = iq_readback_count();
+  if (stale > 0U) {
+    app_log_error("[IWSB] discarding %u stale records from previous mission\n",
+                  (unsigned)stale);
+    iq_ring_reset();
+  }
+
+  uint32_t now = sl_sleeptimer_get_tick_count();
+  iq_mission_active = true;
+  iq_sweeps_done    = 0;
+  iq_batch_ready    = false;
+  iq_win_active     = false;
+  iq_wait_tick      = now;
+  iq_wait_logged    = false;
+
+  app_log_info("[IWSB] mission start — %u sweeps, batch after each\n",
+               (unsigned)IQ_MISSION_SWEEPS);
+  if (!iq_start_sweep(now)) {
+    app_log_info("[IWSB] waiting for radio (stack=%u, ota=%u) — will start automatically.\n",
+                 (unsigned)(emberStackIsUp() ? 1U : 0U),
+                 (unsigned)(meas_tx_ota_busy() ? 1U : 0U));
+    iq_wait_logged = true;
+  }
+}
+
+// 미션 중단(수동/오류).
+void iq_mission_abort(void)
+{
+  if (!iq_mission_active) return;
+  iq_mission_active = false;
+  iq_win_active     = false;
+  meas_tx_abort();
+  app_log_info("[IWSB] mission aborted at sweep %u\n", (unsigned)iq_sweeps_done);
+}
+
+// [IWSB 미션] 스윕 완료 감시 → 배치 준비 → 회수 확인 → 다음 스윕.
+//   ※ 캠페인 진행 중에도 호출되어야 마감시한 검사가 동작하므로,
+//     tick 콜백에서 campaign active/inactive 양쪽 경로 모두에서 부른다.
+static void iq_win_tick(void)
+{
+  if (!iq_win_active && !iq_mission_active) return;
+
+  uint32_t now = sl_sleeptimer_get_tick_count();
+
+  // ── 스윕 진행 중: 마감시한만 감시 ──────────────────────────────────────────
+  if (meas_campaign_active()) {
+    if (iq_win_active && (int32_t)(now - iq_win_deadline) >= 0) {
+      meas_tx_abort();
+      iq_win_active = false;
+      app_log_error("[IWSB] sweep deadline exceeded — aborted. records=%u\n",
+                    (unsigned)iq_readback_count());
+    }
+    return;
+  }
+
+  // ── 스윕이 방금 끝났다면 배치를 만들고 "즉시 스테이징"한다 ────────────────
+  //   ★ OBC 는 0x05 로 시작만 시키고, 회수 준비 명령은 보내지 않는다.
+  //     따라서 스윕이 끝나는 즉시 우리가 알아서 리드백 프레임을 만들어 둔다.
+  //   ★ 레코드가 0개여도 반드시 스테이징한다.
+  //     "스윕 1회 = 플래그 1회 = 0x06 1회" 라는 핸드셰이크를 깨지 않기 위함이다.
+  //     (0개일 때 건너뛰면 OBC 는 그 스윕에 대한 플래그를 영영 못 보고, 스윕
+  //      번호만 조용히 건너뛰어 OBC 쪽 상태기계와 어긋난다.)
+  if (iq_win_active) {
+    iq_win_active  = false;
+    iq_sweeps_done++;
+    uint8_t nrec   = iq_readback_count();
+    obc_stage_iq_readback();   // 명령 없이 자동 준비(링 → 프레임 버퍼)
+    iq_batch_ready = true;
+    iq_batch_tick  = now;
+    iq_wait_tick   = now;      // 다음 스윕 시작 대기 상한은 이 시점부터 센다
+    app_log_info("[IWSB] sweep %u/%u done. batch=%u records (staged)\n",
+                 (unsigned)iq_sweeps_done, (unsigned)IQ_MISSION_SWEEPS,
+                 (unsigned)nrec);
+  }
+
+  if (!iq_mission_active) return;
+
+  // ── [지상 테스트] 자동 회수 모드: OBC 없이 사람 대신 0x06 을 대신 쳐 준다 ──
+  if (iq_batch_ready && iq_auto_drain) {
+    app_log_info("[IWSB] auto-drain sweep %u/%u\n",
+                 (unsigned)iq_sweeps_done, (unsigned)IQ_MISSION_SWEEPS);
+    iq_batch_taken();
+  }
+
+  // ── 배치가 회수(0x06)될 때까지 진행하지 않는다 ────────────────────────────
+  //   ★ 이 검사는 반드시 "미션 종료 판정"보다 앞에 있어야 한다.
+  //     뒤에 두면 마지막(100번째) 배치를 OBC 가 안 가져갔을 때 종료 판정에서
+  //     먼저 return 되어 아래 타임아웃에 영영 도달하지 못하고 미션이 멈춘다.
+  if (iq_batch_ready) {
+    if (sl_sleeptimer_tick_to_ms(now - iq_batch_tick) >= IQ_BATCH_PICKUP_MS) {
+      // OBC 가 끝내 안 가져감 → 미션이 멈추지 않도록 버리고 진행.
+      app_log_error("[IWSB] batch not picked up in %us — dropping, continuing.\n",
+                    (unsigned)(IQ_BATCH_PICKUP_MS / 1000U));
+      iq_ring_reset();
+      iq_batch_ready = false;
+    } else {
+      return;   // 아직 0x06 대기 중
+    }
+  }
+
+  // ── 미션 종료 판정 (배치까지 회수된 뒤에만 도달한다) ──────────────────────
+  if (iq_sweeps_done >= IQ_MISSION_SWEEPS) {
+    iq_mission_active = false;
+    app_log_info("[IWSB] mission complete — %u sweeps.\n",
+                 (unsigned)IQ_MISSION_SWEEPS);
+    return;
+  }
+
+  // ── 다음 스윕 시작 ────────────────────────────────────────────────────────
+  //   시작 못 하면(OTA 중/미조인) 다음 tick 에 재시도. 단 무한 대기는 막는다.
+  if (iq_start_sweep(now)) {
+    iq_wait_tick = now;
+    return;
+  }
+  if (!iq_wait_logged) {
+    app_log_info("[IWSB] sweep deferred (stack=%u, ota=%u) — retrying.\n",
+                 (unsigned)(emberStackIsUp() ? 1U : 0U),
+                 (unsigned)(meas_tx_ota_busy() ? 1U : 0U));
+    iq_wait_logged = true;
+  }
+  if (sl_sleeptimer_tick_to_ms(now - iq_wait_tick) >= IQ_START_WAIT_MS) {
+    iq_mission_active = false;
+    app_log_error("[IWSB] mission gave up — could not start a sweep in %us (at sweep %u).\n",
+                  (unsigned)(IQ_START_WAIT_MS / 1000U), (unsigned)iq_sweeps_done);
+  }
+}
 
 static void meas_tx_drain_recq(void)
 {
@@ -488,7 +986,18 @@ static void meas_tx_tick(void)
       meas_tx_home     = emberGetRadioChannel();
       meas_tx_rssi_sum = 0; meas_tx_rssi_cnt = 0; meas_tx_last_lqi = 0;
       meas_tx_bcnsent  = 0;
-      if (emberSetRadioChannel(meas_tx_ch & 0x7FU) != EMBER_SUCCESS) {
+      meas_tx_iq_n     = 0; meas_tx_iq_done = false;   // [IQ] 라운드 초기화
+      // ★ 채널 전환은 다음 상태에서 — 방송이 실제로 나갈 시간을 준다.
+      meas_tx_t0    = now;
+      meas_tx_state = MEAS_TX_CMD_WAIT;
+      return;
+
+    case MEAS_TX_CMD_WAIT:
+      // 브로드캐스트가 전파로 나갈 시간(MEAS_CMD_TX_MS) 경과 후 채널 전환.
+      if (sl_sleeptimer_tick_to_ms(now - meas_tx_t0) < MEAS_CMD_TX_MS) {
+        return;
+      }
+      if (emberSetRadioChannelExtended(meas_tx_ch & 0x7FU, false) != EMBER_SUCCESS) {
         meas_tx_advance();                      // 채널 전환 실패 → 라운드 스킵
         return;
       }
@@ -499,23 +1008,43 @@ static void meas_tx_tick(void)
 
     case MEAS_TX_ON_CHANNEL: {
       uint32_t el = sl_sleeptimer_tick_to_ms(now - meas_tx_t0);
-      // TX 가 송신원이면 비콘 송신, 아니면 청취(콜백서 누적).
-      if (meas_tx_t == MEAS_TX_DEVICE_ID && meas_tx_bcnsent < MEAS_N_BEACONS) {
-        if (el >= MEAS_BEACON_SETUP_MS
-            && sl_sleeptimer_tick_to_ms(now - meas_tx_lastbcn) >= MEAS_BEACON_GAP_MS) {
-          meas_tx_send_beacon(meas_tx_bcnsent);
-          meas_tx_bcnsent++;
-          meas_tx_lastbcn = now;
+      // ─── TX 가 송신원이면: 슬롯 동안 연속 송신(TX stream) ───────────────────
+      //   짧은 비콘 대신 끊김 없는 스트림을 쏘아, 리스너가 어느 시점에 캡처해도
+      //   반드시 신호가 담기게 한다.
+      if (meas_tx_t == MEAS_TX_DEVICE_ID) {
+        if (!meas_tx_streaming && el >= MEAS_STREAM_START_MS
+            && el < MEAS_STREAM_STOP_MS) {
+          meas_tx_stream_start(meas_tx_ch & 0x7FU);
+        } else if (meas_tx_streaming && el >= MEAS_STREAM_STOP_MS) {
+          meas_tx_stream_stop();                 // 슬롯 종료 전 반드시 정지
         }
       }
+      // [IQ] TX 가 청취자면 슬롯 안에서 IQ 버스트 1회 캡처(rx_id=0=TX).
+      //   스트림이 한창일 때(MEAS_CAPTURE_AT_MS) 잡는다.
+      if (meas_tx_t != MEAS_TX_DEVICE_ID && !meas_tx_iq_done
+          && el >= MEAS_CAPTURE_AT_MS && iq_capture_ready()) {
+        // 캡처 후에도 같은 측정 채널에서 수신을 이어간다(슬롯 종료 시 home 복귀).
+        meas_tx_iq_n = iq_capture_burst(meas_tx_ch & 0x7FU,
+                                        meas_tx_ch & 0x7FU,
+                                        meas_tx_iq_buf,
+                                        IQ_SAMPLES_PER_LINK, IQ_DECIM,
+                                        IQ_CAPTURE_TIMEOUT_MS);
+        meas_tx_iq_done = true;
+      }
       if (el >= MEAS_SLOT_MS) {
-        emberSetRadioChannel(meas_tx_home);     // home 복귀
-        // TX 가 청취자였고 비콘을 들었으면 자기 측정값 기록(t→TX).
-        if (meas_tx_t != MEAS_TX_DEVICE_ID && meas_tx_rssi_cnt > 0) {
-          int8_t avg = (int8_t)(meas_tx_rssi_sum / (int32_t)meas_tx_rssi_cnt);
-          meas_recq_push(meas_tx_t, MEAS_TX_DEVICE_ID,
-                         (uint8_t)(meas_tx_ch | MEAS_BAND_915),
-                         avg, (uint8_t)meas_tx_last_lqi, meas_tx_seq);
+        meas_tx_stream_stop();                                 // 보험: 무조건 정지
+        emberSetRadioChannelExtended(meas_tx_home, false);     // home 복귀(스택 RX 재개)
+        // [IQ] TX 가 청취자였고 샘플을 얻었으면 자기 레코드를 링에 확정.
+        if (meas_tx_t != MEAS_TX_DEVICE_ID && meas_tx_iq_n > 0) {
+          iq_record_t rec;
+          rec.tx_id   = meas_tx_t;
+          rec.rx_id   = MEAS_TX_DEVICE_ID;
+          rec.channel = (uint8_t)(meas_tx_ch | MEAS_BAND_915);
+          rec.seq     = meas_tx_seq;
+          rec.n_samp  = (meas_tx_iq_n > IQ_SAMPLES_PER_LINK)
+                          ? (uint8_t)IQ_SAMPLES_PER_LINK : (uint8_t)meas_tx_iq_n;
+          memcpy(rec.iq, meas_tx_iq_buf, (size_t)rec.n_samp * sizeof(iq_sample_t));
+          iq_ring_push(&rec);
         }
         meas_tx_t0    = now;
         meas_tx_state = MEAS_TX_COLLECT;
@@ -606,6 +1135,11 @@ void emberAfIncomingMessageCallback(EmberIncomingMessage *message)
   }
   if (msg_type == MSG_TYPE_MEAS_REPORT) {
     meas_tx_on_report(message->payload, message->length);
+    return;
+  }
+  // ─── [IQ 측정] 청취 노드의 IQ 프래그먼트 리포트 → 조립 후 링에 확정 ──────────
+  if (msg_type == MSG_TYPE_IQ_REPORT) {
+    meas_tx_on_iq_report(message->payload, (uint8_t)message->length);
     return;
   }
 
@@ -775,6 +1309,26 @@ void emberAfTickCallback(void)
     }
   }
 
+  // ─── [안전장치] 스트림 감시 타이머가 발동했다면 캠페인을 안전 종료 ────────
+  //   tick 이 굶어 스트림이 슬롯을 넘겨 켜져 있던 상황. 송신은 콜백이 이미
+  //   멈췄으므로, 여기서는 채널 원복 + 수신 재개까지 마무리한다.
+  if (meas_stream_guard_fired) {
+    meas_stream_guard_fired = false;
+    meas_stream_guard_armed = false;
+    meas_tx_streaming       = false;   // 콜백이 이미 껐다
+    app_log_error("[MEAS] stream guard fired (tick starved) — aborting campaign.\n");
+    meas_tx_abort();                   // home 채널 복귀 + 수신 재개
+  }
+
+  // ─── [비행 안전] IQ 캡처 후 수신 복구 실패 상태면 계속 되살린다 ──────────
+  //   방치하면 스택은 수신 중이라 믿는데 라디오는 꺼져 있어 노드가 조용히
+  //   네트워크에서 이탈한다(자체 복구 경로가 없다).
+  if (iq_radio_is_deaf()) {
+    if (iq_radio_recover()) {
+      app_log_info("[IQ] radio RX recovered.\n");
+    }
+  }
+
   // ─── [M-3] volatile 버퍼 → 로컬 복사 후 OBC 명령 처리 ──────────────────
   if (obc_cmd_ready) {
     obc_cmd_ready = false;
@@ -792,9 +1346,11 @@ void emberAfTickCallback(void)
       meas_tx_abort();
     } else {
       meas_tx_tick();
+      iq_win_tick();                  // [IQ] 마감시한 감시(진행 중에도 필요)
     }
   } else if (!ota_busy) {
-    meas_auto_tick();                 // 자동 모드: 주기적으로 캠페인 재시작
+    iq_win_tick();                    // [IQ] 스윕 완료 감지 → 창 닫기
+    meas_auto_tick();                 // 자동 모드(기본 OFF): 주기적 재시작
     if (!meas_campaign_active() && poll_running) {
       poll_tick();
     }
@@ -1167,12 +1723,43 @@ static EmberNodeId get_node_id_by_device_id(uint8_t device_id)
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**************************************************************************//**
+ * [비행 안전] 명령 프레임 길이 검증 — 우발적 파괴 명령 차단.
+ *
+ *   SPI 리드백은 마스터가 33KB 를 클럭으로 뽑아가는 동작이고, 그동안 마스터가
+ *   내보내는 dummy 바이트가 우리 수신 버퍼를 가득 채운다. 즉 "읽기"만 해도
+ *   길이 136 짜리 가짜 명령 프레임이 하나 만들어진다. 그 선두 바이트가 우연히
+ *   0x03(ERASE) 이면 OTA 스토리지 슬롯이 통째로 지워진다 — 궤도상에서 복구
+ *   불가능한 사고다. 버스 노이즈/클럭 글리치도 같은 결과를 낼 수 있다.
+ *
+ *   실제 명령은 길이가 정해져 있으므로 길이가 맞지 않으면 실행하지 않는다.
+ *   (dummy 로 채워진 136바이트 프레임은 어떤 명령의 길이와도 일치하지 않는다.)
+ *****************************************************************************/
+static bool obc_cmd_len_ok(uint8_t cmd, uint16_t len)
+{
+  switch (cmd) {
+    case OBC_CMD_DUMMY:     return true;                 // 무시되는 명령
+    case OBC_CMD_DATA:      return (len <= 2U);          // [cc]
+    case OBC_CMD_ERASE:     return (len == 2U);          // [cc][slot]  ★ 파괴적
+    case OBC_CMD_START:     return (len == 2U);          // [cc][target] ★ 파괴적
+    case OBC_CMD_IQ_START:  return (len <= 2U);          // [cc](+dur)
+    case OBC_CMD_IQ_READ:   return (len <= 2U);          // [cc]
+    // [cc][packet_num:2][len:1][data:N] — N 은 호스트 버전에 따라 120 또는 128.
+    //   따라서 최대 정상 길이 = 4 + FW_MAX_CHUNK. OTA 스트리밍을 막지 않도록
+    //   반드시 이 상한을 지킬 것(너무 좁게 잡으면 OTA 가 통째로 죽는다).
+    case OBC_CMD_FW_UPDATE: return (len >= 4U && len <= (4U + FW_MAX_CHUNK));
+    default:                return false;
+  }
+}
+
+/**************************************************************************//**
  * [M-3] obc_rx_buffer(volatile) → 로컬 배열로 복사 후 파싱
  *****************************************************************************/
 static void process_obc_command(void)
 {
   uint8_t  local_buf[OBC_LOCAL_BUF_SIZE];
-  uint16_t local_len = obc_rx_len;
+  // ★ obc_rx_len 이 아니라 명령 확정 시점에 걸어 둔 obc_cmd_len 을 쓴다.
+  //   (SPI 는 CS High 에서 obc_rx_len 을 0 으로 되돌리므로 그대로 읽으면 항상 0)
+  uint16_t local_len = obc_cmd_len;
   if (local_len > sizeof(local_buf)) local_len = sizeof(local_buf);
   memcpy(local_buf, (const uint8_t *)obc_rx_buffer, local_len);
 
@@ -1180,7 +1767,14 @@ static void process_obc_command(void)
     return;   // 빈 트랜잭션 무시
   }
 
-  uint8_t cmd = local_buf[0];   // 명령별 길이 검증은 각 핸들러에서 수행
+  uint8_t cmd = local_buf[0];
+
+  // 길이가 규격과 다르면 실행하지 않는다(위 obc_cmd_len_ok 주석 참조).
+  if (!obc_cmd_len_ok(cmd, local_len)) {
+    app_log_error("OBC: rejected CMD 0x%02X (bad len=%u)\n",
+                  cmd, (unsigned)local_len);
+    return;
+  }
 
   switch (cmd) {
     case OBC_CMD_DUMMY:
@@ -1190,10 +1784,56 @@ static void process_obc_command(void)
     case OBC_CMD_FW_UPDATE: handle_cmd_fw_packet(local_buf, local_len); break;
     case OBC_CMD_ERASE:     handle_cmd_erase(local_buf, local_len);     break;
     case OBC_CMD_START:     handle_cmd_start(local_buf, local_len);     break;
+    case OBC_CMD_IQ_START:  handle_cmd_iq_start(local_buf, local_len);  break;
+    case OBC_CMD_IQ_READ:   handle_cmd_iq_read(local_buf, local_len);   break;
     default:
       app_log_error("OBC: Unknown CMD 0x%02X (len=%d)\n", cmd, local_len);
       break;
   }
+}
+
+/**************************************************************************//**
+ * CMD 0x05 (iq_start): IWSB 미션 트리거.
+ *   인자 없이 항상 IQ_MISSION_SWEEPS 회 스윕을 수행하며, 스윕 1회가 끝날 때마다
+ *   배치를 OBC 가 회수할 수 있게 준비한다. 어떤 상태에서 눌러도 미션 1회가
+ *   온전히 수행되도록 잔여 데이터는 비우고, 시작 불가 상황은 예약 후 자동 재시도.
+ *****************************************************************************/
+static void handle_cmd_iq_start(const uint8_t *buf, uint16_t len)
+{
+  (void)buf; (void)len;   // 미션 모드에서는 인자를 쓰지 않는다(항상 100 스윕)
+  obc_cmd_iq_start_mirror();
+}
+
+/**************************************************************************//**
+ * [IWSB] 0x05 진입점 — OBC(SPI/I2C)와 CLI 가 "같은 코드"를 타도록 분리했다.
+ *   eval 보드에서 OBC 없이 CLI 만으로 전 과정을 동일하게 재현하기 위함.
+ *   OTA 중이어도 거부하지 않는다 — 미션을 예약해 두고 OTA 가 끝나는 즉시
+ *   iq_win_tick() 이 자동으로 첫 스윕을 시작한다(OTA 와의 배타성은 그대로 유지).
+ *****************************************************************************/
+void obc_cmd_iq_start_mirror(void)
+{
+  iq_meas_trigger(0);
+}
+
+/**************************************************************************//**
+ * CMD 0x06 (iq_read): 쌓인 IQ 레코드 "전부"를 I2C 리드백 버퍼에 준비.
+ *   이후 OBC 가 I2C read 한 번으로 전체 프레임을 읽어간다(I2C IRQ 가 스트리밍).
+ *   프레임: [n_records] + 레코드들(각 IQ_REC_SIZE 고정). 호출 후 링은 비워짐.
+ *   ※ OBC 는 06 write 후 tick 반영까지 수 ms 지연 뒤 read 할 것.
+ *****************************************************************************/
+static void handle_cmd_iq_read(const uint8_t *buf, uint16_t len)
+{
+  (void)buf; (void)len;
+
+  if (!iq_mission_batch_ready()) {
+    // 준비된 배치가 없는데 0x06 이 왔다 — 중복 ACK 이거나 미션 밖. 무시.
+    app_log_info("[IWSB] 0x06 ignored (no batch pending).\n");
+    return;
+  }
+  // ★ OBC 가 "데이터 정상 수신" 을 확인해 준 것. 이제서야 다음 스윕을 허가한다.
+  app_log_info("[IWSB] 0x06 ACK — batch %u accepted, next sweep.\n",
+               (unsigned)iq_mission_sweeps_done());
+  iq_batch_taken();
 }
 
 /**************************************************************************//**

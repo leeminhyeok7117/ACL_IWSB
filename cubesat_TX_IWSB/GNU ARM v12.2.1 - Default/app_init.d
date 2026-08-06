@@ -172,7 +172,7 @@ app_init.o: ../app_init.c \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_system.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_system_generic.h \
  /home/lmh/SimplicityStudio/v5_workspace/cubesat_TX_IWSB/config/sl_sensor_sink_config.h \
- ../app_process.h ../app_init.h \
+ ../app_process.h ../app_init.h ../iq_capture.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//protocol/flex/app-framework-common/app_framework_common.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/bootloader/api/btl_interface.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/bootloader/api/btl_errorcode.h \
@@ -187,7 +187,9 @@ app_init.o: ../app_init.c \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_cmu_compat.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_gpio.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/sli_em_cmu.h \
- /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_gpio.h
+ /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_gpio.h \
+ /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_usart.h \
+ /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emdrv/gpiointerrupt/inc/gpiointerrupt.h
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/toolchain/inc/sl_gcc_preinclude.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//app/common/util/app_log/app_log.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/iostream/inc/sl_iostream.h:
@@ -363,6 +365,7 @@ app_init.o: ../app_init.c \
 /home/lmh/SimplicityStudio/v5_workspace/cubesat_TX_IWSB/config/sl_sensor_sink_config.h:
 ../app_process.h:
 ../app_init.h:
+../iq_capture.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//protocol/flex/app-framework-common/app_framework_common.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/bootloader/api/btl_interface.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/bootloader/api/btl_errorcode.h:
@@ -378,3 +381,5 @@ app_init.o: ../app_init.c \
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_gpio.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/sli_em_cmu.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_gpio.h:
+/home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_usart.h:
+/home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emdrv/gpiointerrupt/inc/gpiointerrupt.h:

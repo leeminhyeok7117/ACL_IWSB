@@ -1,0 +1,119 @@
+/***************************************************************************//**
+ * @file
+ * @brief app_process.h — Slave (Sensor / OTA Client)
+ *
+ * [Device ID 결정 우선순위]
+ *   1순위: NVM3_KEY_DEVICE_ID (UART CLI "set_id <1-4>" 로 한 번만 기입)
+ *   2순위: g_eui64_map 테이블 (아래 EUI-64를 실제 값으로 채운 후 OTA 배포)
+ *          → 위성 조립 완료 후 UART/J-Link 둘 다 불가한 경우 사용
+ *
+ * [EUI-64 확인 방법]
+ *   - Simplicity Commander: commander device info
+ *   - CLI: info 명령 → EUI64 필드
+ ******************************************************************************/
+#ifndef APP_PROCESS_H
+#define APP_PROCESS_H
+
+#include <stdint.h>
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  NVM3 키
+// ─────────────────────────────────────────────────────────────────────────────
+#define NVM3_KEY_DEVICE_ID          0x0001UL
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  ★★★ MY_DEVICE_ID_FALLBACK — 첫 번째 OTA 전용 ★★★
+//
+//  [우선순위 — fallback 권위 방식]
+//   1~4 로 빌드 → 그 보드는 "무조건" 이 값. NVM3와 다르면 NVM3를 덮어씀.
+//                 → 첫 OTA에서 잘못 넣어도 올바른 값으로 재OTA 하면 교정됨.
+//   0xFF 로 빌드 → 이 상수 무시, 각 보드는 NVM3에 저장된 자기 값을 읽음.
+//
+//  [운용 규칙]
+//   첫 OTA   : 보드별로 1/2/3/4 설정 후 4개 GBL 빌드 → 각 보드 ID 확정(NVM3 저장).
+//   이후 OTA : 0xFF 단일 GBL 빌드 → 4개 보드 모두 동일 GBL로 업데이트.
+//   ※ 모든 보드가 첫 OTA(1~4)를 마친 뒤 0xFF로 바꾸면 끝. 추가 주의사항 없음.
+// ─────────────────────────────────────────────────────────────────────────────
+#define MY_DEVICE_ID_FALLBACK  3   // ← 첫 OTA 시 1·2·3·4 로 변경 후 보드별 빌드
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  EUI-64 → device_id 매핑 테이블  (2순위 폴백, MY_DEVICE_ID_FALLBACK 보다 우선)
+//  ★ 보드 EUI-64를 알고 있으면 여기에 기입하면 첫 OTA도 단일 빌드 가능 ★
+//  리틀엔디안(LSB first). all-zero = 미기입(매칭 안 됨).
+//  EUI-64 확인: TX에서 `info` CLI 또는 Simplicity Commander `device info`
+// ─────────────────────────────────────────────────────────────────────────────
+typedef struct { uint8_t eui64[8]; uint8_t device_id; } EUI64DeviceIdEntry;
+
+static const EUI64DeviceIdEntry g_eui64_map[] = {
+  {{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}, 1},  // RX 보드 1
+  {{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}, 2},  // RX 보드 2
+  {{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}, 3},  // RX 보드 3
+  {{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}, 4},  // RX 보드 4
+};
+static const uint8_t g_eui64_map_count =
+  (uint8_t)(sizeof(g_eui64_map) / sizeof(g_eui64_map[0]));
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  RF 메시지 타입 (TX app_process.h와 반드시 동일한 값)
+// ─────────────────────────────────────────────────────────────────────────────
+#define MSG_TYPE_OTA_PREPARE        0xF0U
+#define MSG_TYPE_OTA_PREPARE_ACK    0xF1U
+#define MSG_TYPE_FW_VERSION_REPORT  0xF2U
+#define MSG_TYPE_ID_ANNOUNCE        0xA0U
+#define MSG_TYPE_POLL_REQUEST       0xB0U
+#define MSG_TYPE_POLL_RESPONSE      0xB1U
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  RSSI 측정 프로토콜 (주파수 호핑 기반 별 토폴로지) — TX/RX 동일 값 필수
+//
+//  TX(coordinator)가 (송신원 T, 채널 ch) 라운드를 오케스트레이션:
+//   1) MEAS_CMD 브로드캐스트 → 모든 노드가 ch 로 채널 전환
+//   2) 송신원 T 가 빈 비콘 N개 브로드캐스트 → 나머지 노드가 message->rssi 측정
+//   3) home 채널(0) 복귀 → 측정값을 MEAS_REPORT 로 TX 에 보고
+//   4) TX 가 외부 플래시에 저장
+//  ※ FH 컴포넌트는 포함됐으나 비활성(고정 ch0) → 앱이 직접 채널 스윕(안전).
+// ─────────────────────────────────────────────────────────────────────────────
+#define MSG_TYPE_MEAS_CMD           0xC0U  // TX→bcast : [1]seq [2]tx_id [3]ch [4]n_beacons
+#define MSG_TYPE_MEAS_BEACON        0xC1U  // T →bcast : [1]seq [2]tx_id [3]ch [4]beacon_idx
+#define MSG_TYPE_MEAS_REPORT        0xC2U  // listener→TX: [1]seq [2]tx_id [3]ch [4]rx_id [5]rssi [6]lqi [7]count
+
+#define MEAS_TX_DEVICE_ID           0x00U  // 프로토콜/레코드에서 TX 자신 (RX 는 1~4)
+#define MEAS_CH_FIRST               0U     // 스윕 시작 채널 (915.0 MHz)
+#define MEAS_CH_LAST                20U    // 스윕 끝 채널 (915MHz 채널플랜 0~20 = 915.0~923.0 MHz)
+#define MEAS_N_BEACONS              4U     // (구) 라운드당 비콘 수 — 연속 송신 전환으로 미사용
+#define MEAS_BEACON_SETUP_MS        60U    // cmd 수신→측정 시작 대기(리스너 채널전환 여유)
+#define MEAS_BEACON_GAP_MS          15U    // (구) 비콘 간 간격 — 연속 송신 전환으로 미사용
+#define MEAS_SLOT_MS                250U   // 측정 슬롯 길이(이후 home 복귀)
+
+// ─── [IQ] 연속 송신(TX stream) 타이밍 — ★ TX 헤더와 반드시 동일 ──────────────
+//   [왜 바꿨나] 짧은 비콘(패킷)은 15ms 간격으로 수 백 µs 만 존재하는데, IQ 캡처
+//   창은 64샘플 ≈ 수십 µs 에 불과해 둘이 겹칠 확률이 사실상 0 이었다. 실측에서
+//   모든 레코드가 "수신기 켜질 때의 순간 반응 8샘플 + 잡음 56샘플" 로만 채워진
+//   이유가 이것. → 송신원이 슬롯 동안 "끊김 없이" 쏘면 어느 시점에 캡처해도
+//   반드시 신호가 담긴다. TX_STREAM_PN9(의사난수 변조)는 실제 통신과 같은
+//   대역폭을 점유하므로 경로 특성 측정에 적합하다(무변조 CW 보다 유리).
+#define MEAS_STREAM_START_MS        20U    // 채널 전환 후 이 시점부터 송신원이 스트리밍 시작
+#define MEAS_STREAM_STOP_MS         230U   // 슬롯(250ms) 종료 직전 반드시 정지
+#define MEAS_CAPTURE_AT_MS          80U    // 리스너가 캡처를 수행하는 시점(스트림 한가운데)
+#define MEAS_REPORT_GAP_MS          40U    // 리포트 충돌 방지 스태거(device_id 당)
+#define MEAS_COLLECT_MS             500U   // (TX) 라운드별 리포트 수집 윈도
+#define MEAS_BAND_915               0x00U  // channel 바이트 bit7=0 → 915MHz
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  펌웨어 버전 — OTA 업데이트 시 변경
+// ─────────────────────────────────────────────────────────────────────────────
+#define FW_VERSION_MAJOR    0x01U
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  ID_ANNOUNCE 타이밍
+// ─────────────────────────────────────────────────────────────────────────────
+#define ID_ANNOUNCE_DELAY_MS        1000U
+#define ID_ANNOUNCE_RETRY_MS        10000U   // 10s: TX 미부팅 시 빠른 실패 감지
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  app_init.c에서 호출하는 공개 함수
+// ─────────────────────────────────────────────────────────────────────────────
+/// resume 경로(SUCCESS)에서 tick이 돌도록 EM2 sleep 차단 + wakeup timer 시작.
+void join_sleep_block_enable(void);
+
+#endif // APP_PROCESS_H

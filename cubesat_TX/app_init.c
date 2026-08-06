@@ -66,6 +66,20 @@ uint8_t    ota_image_tag     = 0xAA;
 
 EmberNodeId ota_target_node  = EMBER_NULL_NODE_ID;
 
+// ─── [I2C 상태 보고] OTA 로직과 무관. app_process.c의 관찰자(읽기전용)가 갱신 ──
+//   AP_OBC가 I2C READ 트랜잭션을 걸면 고정 8바이트 응답:
+//   [0x01][len=3 (4B LE)][state][result][progress]
+//   result: 0=idle 1=in-progress 2=success 3=fail
+volatile uint8_t i2c_rpt_state    = 0;
+volatile uint8_t i2c_rpt_result   = 0;
+volatile uint8_t i2c_rpt_progress = 0;
+
+// I2C 읽기 응답 버퍼/인덱스 (IRQ 전용)
+static uint8_t  i2c_tx_buf[8];
+static uint8_t  i2c_tx_len = 0;
+static uint8_t  i2c_tx_idx = 0;
+static bool     i2c_is_read = false;
+
 // -----------------------------------------------------------------------------
 //                          Public Function Definitions
 // -----------------------------------------------------------------------------
@@ -246,6 +260,8 @@ static void obc_i2c_slave_init(void)
                 I2C_IEN_ADDR     |
                 I2C_IEN_RXDATAV  |
                 I2C_IEN_SSTOP    |
+                I2C_IEN_ACK      |   // [상태보고] 읽기 응답 바이트 피드용
+                I2C_IEN_NACK     |   // [상태보고] 읽기 종료 감지용
                 I2C_IEN_BUSERR   |
                 I2C_IEN_ARBLOST);
   NVIC_ClearPendingIRQ(I2C0_IRQn);
@@ -275,19 +291,54 @@ void I2C0_IRQHandler(void)
   if (flags & (I2C_IF_BUSERR | I2C_IF_ARBLOST)) {
     OBC_I2C_PERIPHERAL->CMD = I2C_CMD_ABORT;
     I2C_IntClear(OBC_I2C_PERIPHERAL, flags);
-    obc_rx_len = 0;
+    obc_rx_len  = 0;
+    i2c_is_read = false;
     return;
   }
 
   // ─── 주소 프레임 수신 ───────────────────────────────────────────────────
   if (flags & I2C_IF_ADDR) {
-    (void)OBC_I2C_PERIPHERAL->RXDATA;   // 주소 바이트 소비
-    obc_rx_len = 0;
+    uint8_t addr = OBC_I2C_PERIPHERAL->RXDATA;   // 주소+R/W 비트 소비
+    i2c_is_read  = ((addr & 0x01u) != 0);        // bit0=1 → READ
+    obc_rx_len   = 0;
     I2C_IntClear(OBC_I2C_PERIPHERAL, I2C_IFC_ADDR);
     OBC_I2C_PERIPHERAL->CMD = I2C_CMD_ACK;
+
+    if (i2c_is_read) {
+      // [상태보고] 고정 8바이트 응답 구성: [cc][len:4 LE][state][result][progress]
+      i2c_tx_buf[0] = 0x01;                  // cc (data/status reply)
+      i2c_tx_buf[1] = 3;  i2c_tx_buf[2] = 0;
+      i2c_tx_buf[3] = 0;  i2c_tx_buf[4] = 0; // len = 3 (LE)
+      i2c_tx_buf[5] = i2c_rpt_state;
+      i2c_tx_buf[6] = i2c_rpt_result;
+      i2c_tx_buf[7] = i2c_rpt_progress;
+      i2c_tx_len = 8;
+      i2c_tx_idx = 0;
+      OBC_I2C_PERIPHERAL->TXDATA = i2c_tx_buf[i2c_tx_idx++];  // 첫 바이트 적재
+    }
   }
 
-  // ─── 수신 가능한 바이트 전부 드레인 ─────────────────────────────────────
+  // ─── [READ] 응답 바이트 피드 (write 트랜잭션이면 아래 블록 모두 skip) ────
+  if (i2c_is_read) {
+    if (flags & I2C_IF_ACK) {   // 마스터가 이전 바이트 ACK → 다음 바이트
+      OBC_I2C_PERIPHERAL->TXDATA =
+        (i2c_tx_idx < i2c_tx_len) ? i2c_tx_buf[i2c_tx_idx++] : 0xFF;
+      I2C_IntClear(OBC_I2C_PERIPHERAL, I2C_IFC_ACK);
+    }
+    if (flags & I2C_IF_NACK) {  // 마스터가 읽기 종료
+      I2C_IntClear(OBC_I2C_PERIPHERAL, I2C_IFC_NACK);
+    }
+    if (flags & I2C_IF_SSTOP) {
+      I2C_IntClear(OBC_I2C_PERIPHERAL, I2C_IFC_SSTOP);
+      i2c_is_read = false;
+    }
+    // READ 중엔 RXDATAV/쓰기 처리 안 함
+    I2C_IntClear(OBC_I2C_PERIPHERAL,
+                 flags & ~(I2C_IFC_ADDR | I2C_IFC_ACK | I2C_IFC_NACK | I2C_IFC_SSTOP));
+    return;
+  }
+
+  // ─── [WRITE] 수신 가능한 바이트 전부 드레인 (기존 동작, 불변) ───────────
   while (OBC_I2C_PERIPHERAL->STATUS & I2C_STATUS_RXDATAV) {
     if (obc_rx_len < sizeof(obc_rx_buffer)) {
       obc_rx_buffer[obc_rx_len++] = OBC_I2C_PERIPHERAL->RXDATA;

@@ -100,10 +100,24 @@ autogen/sl_event_handler.o: ../autogen/sl_event_handler.c \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//app/common/util/app_log/app_log.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/iostream/inc/sl_iostream.h \
  /home/lmh/SimplicityStudio/v5_workspace/sdr_test/autogen/sl_iostream_handles.h \
+ /home/lmh/SimplicityStudio/v5_workspace/sdr_test/autogen/sl_iostream_init_usart_instances.h \
+ /home/lmh/SimplicityStudio/v5_workspace/sdr_test/autogen/sl_component_catalog.h \
+ /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/iostream/inc/sl_iostream_uart.h \
+ /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/iostream/inc/sl_iostream.h \
+ /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emdrv/dmadrv/inc/dmadrv.h \
+ /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emdrv/common/inc/ecode.h \
+ /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_ldma.h \
+ /home/lmh/SimplicityStudio/v5_workspace/sdr_test/config/dmadrv_config.h \
  /home/lmh/SimplicityStudio/v5_workspace/sdr_test/config/app_log_config.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/driver/debug/inc/sl_debug_swo.h \
+ /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emdrv/gpiointerrupt/inc/gpiointerrupt.h \
+ /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_gpio.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/iostream/inc/sl_iostream_stdlib_config.h \
+ ../autogen/sl_iostream_init_usart_instances.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/mpu/inc/sl_mpu.h \
+ ../autogen/sl_simple_button_instances.h \
+ /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/driver/button/inc/sl_simple_button.h \
+ /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/driver/button/inc/sl_button.h \
  ../autogen/sl_iostream_init_instances.h \
  /home/lmh/SimplicityStudio/SDKs/gecko_sdk//hardware/driver/configuration_over_swo/inc/sl_cos.h
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/common/toolchain/inc/sl_gcc_preinclude.h:
@@ -207,9 +221,23 @@ autogen/sl_event_handler.o: ../autogen/sl_event_handler.c \
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//app/common/util/app_log/app_log.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/iostream/inc/sl_iostream.h:
 /home/lmh/SimplicityStudio/v5_workspace/sdr_test/autogen/sl_iostream_handles.h:
+/home/lmh/SimplicityStudio/v5_workspace/sdr_test/autogen/sl_iostream_init_usart_instances.h:
+/home/lmh/SimplicityStudio/v5_workspace/sdr_test/autogen/sl_component_catalog.h:
+/home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/iostream/inc/sl_iostream_uart.h:
+/home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/iostream/inc/sl_iostream.h:
+/home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emdrv/dmadrv/inc/dmadrv.h:
+/home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emdrv/common/inc/ecode.h:
+/home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_ldma.h:
+/home/lmh/SimplicityStudio/v5_workspace/sdr_test/config/dmadrv_config.h:
 /home/lmh/SimplicityStudio/v5_workspace/sdr_test/config/app_log_config.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/driver/debug/inc/sl_debug_swo.h:
+/home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emdrv/gpiointerrupt/inc/gpiointerrupt.h:
+/home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/emlib/inc/em_gpio.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/iostream/inc/sl_iostream_stdlib_config.h:
+../autogen/sl_iostream_init_usart_instances.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/service/mpu/inc/sl_mpu.h:
+../autogen/sl_simple_button_instances.h:
+/home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/driver/button/inc/sl_simple_button.h:
+/home/lmh/SimplicityStudio/SDKs/gecko_sdk//platform/driver/button/inc/sl_button.h:
 ../autogen/sl_iostream_init_instances.h:
 /home/lmh/SimplicityStudio/SDKs/gecko_sdk//hardware/driver/configuration_over_swo/inc/sl_cos.h:

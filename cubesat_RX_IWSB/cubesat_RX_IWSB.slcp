@@ -24,12 +24,14 @@ source:
 - {path: app_process.c}
 - {path: app_cli.c}
 - {path: fw_guard.c}
+- {path: iq_capture.c}
 include:
 - path: .
   file_list:
   - {path: app_init.h}
   - {path: fw_guard.h}
   - {path: app_process.h}
+  - {path: iq_capture.h}
 sdk: {id: gecko_sdk, version: 4.5.0}
 toolchain_settings:
 - {value: debug, option: optimize}

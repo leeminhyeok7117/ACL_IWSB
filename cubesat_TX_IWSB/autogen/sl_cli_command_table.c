@@ -135,6 +135,22 @@ void cli_form(sl_cli_command_arg_t *arguments);
 void cli_set_tx_power(sl_cli_command_arg_t *arguments);
 void cli_pjoin(sl_cli_command_arg_t *arguments);
 void cli_remove_child(sl_cli_command_arg_t *arguments);
+void cli_meas_start(sl_cli_command_arg_t *arguments);
+void cli_meas_stat(sl_cli_command_arg_t *arguments);
+void cli_meas_clear(sl_cli_command_arg_t *arguments);
+void cli_meas_auto(sl_cli_command_arg_t *arguments);
+void cli_ota_target(sl_cli_command_arg_t *arguments);
+void cli_ota_start(sl_cli_command_arg_t *arguments);
+void cli_slave_list(sl_cli_command_arg_t *arguments);
+void cli_poll_status(sl_cli_command_arg_t *arguments);
+void cli_iq_start(sl_cli_command_arg_t *arguments);
+void cli_iq_auto(sl_cli_command_arg_t *arguments);
+void cli_spi_stat(sl_cli_command_arg_t *arguments);
+void cli_spi_clear(sl_cli_command_arg_t *arguments);
+void cli_spi_inject(sl_cli_command_arg_t *arguments);
+void cli_iq_abort(sl_cli_command_arg_t *arguments);
+void cli_iq_status(sl_cli_command_arg_t *arguments);
+void cli_iq_dump(sl_cli_command_arg_t *arguments);
 
 // Command structs. Names are in the format : cli_cmd_{command group name}_{command name}
 // In order to support hyphen in command and group name, every occurence of it while
@@ -217,6 +233,102 @@ static const sl_cli_command_info_t cli_cmd__remove_child = \
                   "Mode" SL_CLI_UNIT_SEPARATOR "Short Address of the child to remove. Not used if long address is given" SL_CLI_UNIT_SEPARATOR "Long Address of the child to remove" SL_CLI_UNIT_SEPARATOR,
                  {SL_CLI_ARG_UINT8, SL_CLI_ARG_UINT16, SL_CLI_ARG_HEXOPT, SL_CLI_ARG_END, });
 
+static const sl_cli_command_info_t cli_cmd__meas = \
+  SL_CLI_COMMAND(cli_meas_start,
+                 "Start one RSSI measurement campaign (frequency-hopping sweep)",
+                  "",
+                 {SL_CLI_ARG_END, });
+
+static const sl_cli_command_info_t cli_cmd__meas_stat = \
+  SL_CLI_COMMAND(cli_meas_stat,
+                 "Print RSSI log status/record count",
+                  "",
+                 {SL_CLI_ARG_END, });
+
+static const sl_cli_command_info_t cli_cmd__meas_clear = \
+  SL_CLI_COMMAND(cli_meas_clear,
+                 "Clear the RSSI log (reset cursor)",
+                  "",
+                 {SL_CLI_ARG_END, });
+
+static const sl_cli_command_info_t cli_cmd__meas_auto = \
+  SL_CLI_COMMAND(cli_meas_auto,
+                 "Enable/disable periodic auto sweep (arg 0/1; no arg = show state)",
+                  "1=enable periodic sweep, 0=disable" SL_CLI_UNIT_SEPARATOR,
+                 {SL_CLI_ARG_UINT8OPT, SL_CLI_ARG_END, });
+
+static const sl_cli_command_info_t cli_cmd__ota_target = \
+  SL_CLI_COMMAND(cli_ota_target,
+                 "Select OTA target device_id (1-4)",
+                  "device_id" SL_CLI_UNIT_SEPARATOR,
+                 {SL_CLI_ARG_UINT8, SL_CLI_ARG_END, });
+
+static const sl_cli_command_info_t cli_cmd__ota_start = \
+  SL_CLI_COMMAND(cli_ota_start,
+                 "[TEST-ONLY] Start OTA to device_id without I2C",
+                  "device_id" SL_CLI_UNIT_SEPARATOR,
+                 {SL_CLI_ARG_UINT8, SL_CLI_ARG_END, });
+
+static const sl_cli_command_info_t cli_cmd__slave_list = \
+  SL_CLI_COMMAND(cli_slave_list,
+                 "Print registered slave list",
+                  "",
+                 {SL_CLI_ARG_END, });
+
+static const sl_cli_command_info_t cli_cmd__poll_status = \
+  SL_CLI_COMMAND(cli_poll_status,
+                 "Force restart polling cycle",
+                  "",
+                 {SL_CLI_ARG_END, });
+
+static const sl_cli_command_info_t cli_cmd__iq_start = \
+  SL_CLI_COMMAND(cli_iq_start,
+                 "[IQ ground test] Open IQ measurement window for dur_s seconds (replaces OBC 0x05)",
+                  "Duration in seconds (default 5)" SL_CLI_UNIT_SEPARATOR,
+                 {SL_CLI_ARG_UINT16OPT, SL_CLI_ARG_END, });
+
+static const sl_cli_command_info_t cli_cmd__iq_auto = \
+  SL_CLI_COMMAND(cli_iq_auto,
+                 "[IWSB ground test] Auto-drain batches (0/1; no arg = show state)",
+                  "1=auto-drain ON, 0=OFF" SL_CLI_UNIT_SEPARATOR,
+                 {SL_CLI_ARG_UINT8OPT, SL_CLI_ARG_END, });
+
+static const sl_cli_command_info_t cli_cmd__spi_stat = \
+  SL_CLI_COMMAND(cli_spi_stat,
+                 "[ground test] SPI slave diagnostics",
+                  "",
+                 {SL_CLI_ARG_END, });
+
+static const sl_cli_command_info_t cli_cmd__spi_clear = \
+  SL_CLI_COMMAND(cli_spi_clear,
+                 "[ground test] Clear SPI diagnostic counters",
+                  "",
+                 {SL_CLI_ARG_END, });
+
+static const sl_cli_command_info_t cli_cmd__spi_inject = \
+  SL_CLI_COMMAND(cli_spi_inject,
+                 "[ground test] Inject an OBC command without physical SPI",
+                  "Command byte" SL_CLI_UNIT_SEPARATOR "Optional argument byte" SL_CLI_UNIT_SEPARATOR,
+                 {SL_CLI_ARG_UINT8, SL_CLI_ARG_UINT8OPT, SL_CLI_ARG_END, });
+
+static const sl_cli_command_info_t cli_cmd__iq_abort = \
+  SL_CLI_COMMAND(cli_iq_abort,
+                 "[IWSB ground test] Abort running mission",
+                  "",
+                 {SL_CLI_ARG_END, });
+
+static const sl_cli_command_info_t cli_cmd__iq_status = \
+  SL_CLI_COMMAND(cli_iq_status,
+                 "[IQ ground test] Print queued IQ record count",
+                  "",
+                 {SL_CLI_ARG_END, });
+
+static const sl_cli_command_info_t cli_cmd__iq_dump = \
+  SL_CLI_COMMAND(cli_iq_dump,
+                 "[IQ ground test] Dump all queued IQ records as CSV over UART (replaces OBC 0x06)",
+                  "",
+                 {SL_CLI_ARG_END, });
+
 
 // Create group command tables and structs if cli_groups given
 // in template. Group name is suffixed with _group_table for tables
@@ -236,6 +348,22 @@ const sl_cli_command_entry_t sl_cli_default_command_table[] = {
   { "set_tx_power", &cli_cmd__set_tx_power, false },
   { "pjoin", &cli_cmd__pjoin, false },
   { "remove_child", &cli_cmd__remove_child, false },
+  { "meas", &cli_cmd__meas, false },
+  { "meas_stat", &cli_cmd__meas_stat, false },
+  { "meas_clear", &cli_cmd__meas_clear, false },
+  { "meas_auto", &cli_cmd__meas_auto, false },
+  { "ota_target", &cli_cmd__ota_target, false },
+  { "ota_start", &cli_cmd__ota_start, false },
+  { "slave_list", &cli_cmd__slave_list, false },
+  { "poll_status", &cli_cmd__poll_status, false },
+  { "iq_start", &cli_cmd__iq_start, false },
+  { "iq_auto", &cli_cmd__iq_auto, false },
+  { "spi_stat", &cli_cmd__spi_stat, false },
+  { "spi_clear", &cli_cmd__spi_clear, false },
+  { "spi_inject", &cli_cmd__spi_inject, false },
+  { "iq_abort", &cli_cmd__iq_abort, false },
+  { "iq_status", &cli_cmd__iq_status, false },
+  { "iq_dump", &cli_cmd__iq_dump, false },
   { NULL, NULL, false },
 };
 
