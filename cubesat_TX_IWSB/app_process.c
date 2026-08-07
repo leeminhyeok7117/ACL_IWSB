@@ -35,6 +35,7 @@
 #include "fw_guard.h"
 #include "em_usart.h"
 #include "sl_power_manager.h"   // [IQ] 측정 중 sleep 차단(RX 와 타이밍 정합)
+#include "sl_iostream_usart_vcom_config.h"   // 콘솔 주변장치(USART2) 참조
 #include "iq_capture.h"   // [IQ] RAIL IQ 캡처 코어 + IQ 리포트 프로토콜
 
 // [디버깅] VCOM(USART0) TX가 다 빠질 때까지 대기 → 로그 즉시 표시(sleep로 갇힘 방지)
@@ -42,10 +43,12 @@
 //     TXC 가 영원히 서지 않아 이 자리에서 완전히 멈춘다(재부팅 외 복구 불가).
 //     최대 대기 횟수를 둬서 어떤 경우에도 반드시 빠져나오게 한다.
 //     (115200bps 기준 1바이트 ≈ 87us. 100k 회전이면 넉넉히 상한을 넘긴다.)
+//   ★ USART0 은 이제 OBC SPI 슬레이브가 쓴다. 콘솔은 USART2(VCOM)로 옮겼으므로
+//     여기서도 USART0 을 보면 안 된다(SPI 상태를 읽게 되어 무의미).
 static inline void log_flush(void)
 {
   for (uint32_t guard = 0; guard < 100000U; guard++) {
-    if (USART0->STATUS & USART_STATUS_TXC) return;
+    if (SL_IOSTREAM_USART_VCOM_PERIPHERAL->STATUS & USART_STATUS_TXC) return;
   }
 }
 

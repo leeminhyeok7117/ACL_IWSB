@@ -9,6 +9,7 @@
 		<item key="incremental" value="false"/>
 		<item key="isRegEx" value="false"/>
 		<list key="findhistory">
+			<item value="spi"/>
 			<item value="return"/>
 			<item value="cc_TX"/>
 			<item value="burst"/>
@@ -23,7 +24,6 @@
 			<item value="handle_ota_prepare_msg"/>
 			<item value="set_secur"/>
 			<item value="set"/>
-			<item value="set_id"/>
 		</list>
 		<list key="replacehistory">
 		</list>

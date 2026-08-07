@@ -554,7 +554,6 @@
           <file name="libconnect-frequency-hopping-library-efr32xg1x-gcc.a" uri="studio:/sdk/protocol/flex/libs/libconnect-frequency-hopping-library-efr32xg1x-gcc.a"/>
           <file name="libconnect-packet-queue-library-efr32xg1x-gcc.a" uri="studio:/sdk/protocol/flex/libs/libconnect-packet-queue-library-efr32xg1x-gcc.a"/>
           <file name="libconnect-parent-support-library-efr32xg1x-gcc.a" uri="studio:/sdk/protocol/flex/libs/libconnect-parent-support-library-efr32xg1x-gcc.a"/>
-          <file name="libconnect-radio-stream-library-efr32xg1x-gcc.a" uri="studio:/sdk/protocol/flex/libs/libconnect-radio-stream-library-efr32xg1x-gcc.a"/>
           <file name="libconnect-stack-common-library-efr32xg1x-gcc.a" uri="studio:/sdk/protocol/flex/libs/libconnect-stack-common-library-efr32xg1x-gcc.a"/>
           <file name="libconnect-stack-counters-library-efr32xg1x-gcc.a" uri="studio:/sdk/protocol/flex/libs/libconnect-stack-counters-library-efr32xg1x-gcc.a"/>
         </folder>
@@ -931,7 +930,6 @@
   <libraryFile uri="studio:/sdk/protocol/flex/libs/libconnect-frequency-hopping-library-efr32xg1x-gcc.a"/>
   <libraryFile uri="studio:/sdk/protocol/flex/libs/libconnect-packet-queue-library-efr32xg1x-gcc.a"/>
   <libraryFile uri="studio:/sdk/protocol/flex/libs/libconnect-parent-support-library-efr32xg1x-gcc.a"/>
-  <libraryFile uri="studio:/sdk/protocol/flex/libs/libconnect-radio-stream-library-efr32xg1x-gcc.a"/>
   <libraryFile uri="studio:/sdk/protocol/flex/libs/libconnect-stack-common-library-efr32xg1x-gcc.a"/>
   <libraryFile uri="studio:/sdk/protocol/flex/libs/libconnect-stack-counters-library-efr32xg1x-gcc.a"/>
   <libraryFile uri="studio:/sdk/platform/emdrv/nvm3/lib/libnvm3_CM4_gcc.a"/>

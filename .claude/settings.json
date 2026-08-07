@@ -60,7 +60,17 @@
       "Bash(awk '/배치가 회수\\\\\\(0x06\\\\\\)될 때까지/,/미션 종료 판정/' app_process.c)",
       "Bash(awk '/미션 종료 판정 \\\\\\(배치까지/,/^  }/' app_process.c)",
       "Bash(awk '/static void handle_cmd_iq_read/,/^}/' app_process.c)",
-      "Bash(awk '/static void meas_tx_on_iq_report/,/^}/' app_process.c)"
+      "Bash(awk '/static void meas_tx_on_iq_report/,/^}/' app_process.c)",
+      "Bash(awk '/static void obc_spi_prime_tx/,/^}/' app_init.c)",
+      "Bash(python3 - /home/lmh/SimplicityStudio/SDKs/gecko_sdk/platform/Device/SiliconLabs/EFR32FG12P/Include/efr32fg12p_af_ports.h /home/lmh/SimplicityStudio/SDKs/gecko_sdk/platform/Device/SiliconLabs/EFR32FG12P/Include/efr32fg12p_af_pins.h)",
+      "Bash(awk '/^static void obc_spi_slave_init/,/^\\\\}/' app_init.c)",
+      "Bash(grep -nvE \"^\\\\s*//|^\\\\s*$\")",
+      "Bash(awk '/^static uint8_t obc_next_tx_byte/,/^\\\\}/' app_init.c)",
+      "Bash(awk '/^static void obc_spi_prime_tx/,/^\\\\}/' app_init.c)",
+      "Bash(awk '/^void obc_stage_iq_readback/,/^\\\\}/' app_init.c)"
+    ],
+    "additionalDirectories": [
+      "/home/lmh/SimplicityStudio/v5_workspace/cubesat_TX_IWSB"
     ]
   }
 }

@@ -240,7 +240,8 @@ template_contribution:
   value: {name: spi_stat, handler: cli_spi_stat, help: '[ground test] SPI slave diagnostics'}
 - name: cli_command
   priority: 0
-  value: {name: spi_clear, handler: cli_spi_clear, help: '[ground test] Clear SPI diagnostic counters'}
+  value: {name: spi_clear, handler: cli_spi_clear, help: '[ground test] Clear SPI
+      diagnostic counters'}
 - name: cli_command
   priority: 0
   value:
@@ -252,7 +253,8 @@ template_contribution:
     - {type: uint8opt, help: Optional argument byte}
 - name: cli_command
   priority: 0
-  value: {name: iq_abort, handler: cli_iq_abort, help: '[IWSB ground test] Abort running mission'}
+  value: {name: iq_abort, handler: cli_iq_abort, help: '[IWSB ground test] Abort running
+      mission'}
 - name: cli_command
   priority: 0
   value: {name: iq_status, handler: cli_iq_status, help: '[IQ ground test] Print queued

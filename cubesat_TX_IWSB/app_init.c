@@ -22,6 +22,8 @@
 #include "em_gpio.h"
 #include "em_usart.h"
 #include "gpiointerrupt.h"
+#include "em_ldma.h"
+#include "dmadrv.h"
 #include <string.h>
 
 // -----------------------------------------------------------------------------
@@ -48,45 +50,58 @@
 //   EFR32 = 슬레이브. OBC 가 마스터로 CLK/CS 를 공급한다.
 //   USART0=디버그콘솔, USART1=외부플래시가 이미 점유 → USART2 사용.
 //
-//   [핀 근거] UG264(BRD4253A 라디오보드 가이드) Table 3.1 "Expansion Header Pinout":
-//     EXP4  = PA6 = SPI_MOSI = USART2_TX  #1
-//     EXP6  = PA7 = SPI_MISO = USART2_RX  #1
-//     EXP8  = PA8 = SPI_SCLK = USART2_CLK #1
-//     EXP10 = PA9 = SPI_CS   = USART2_CS  #1
-//   (참고로 같은 표에서 EXP15=PC10=I2C_SCL#14, EXP16=PC11=I2C_SDA#16 — 기존 I2C 배선과 일치)
+//   [핀 근거] 실제 위성보드 스키매틱(efr32fg12p433f1024gm48):
+//     PA0 = OBC_SPI_MOSI
+//     PA1 = OBC_SPI_MISO
+//     PA2 = OBC_SPI_SCLK
+//     PA3 = OBC_SPI_CS_N
+//     (PA4 = FLASH_SPI_CS_N, PC6/7/8 = FLASH SPI  → 외부플래시는 USART1 그대로)
 //
-//   ★★ 핵심 주의: EXP 헤더의 MOSI/MISO 표기는 "EFR32 가 마스터"라는 전제다.
-//     우리는 EFR32 가 **슬레이브**이므로 송수신 방향이 반대가 된다:
-//        MOSI(PA6) = 마스터가 내보내는 선 → 슬레이브는 여기서 **받는다** → USART2_RX
-//        MISO(PA7) = 슬레이브가 내보내는 선                              → USART2_TX
-//     따라서 TX/RX 의 LOC 를 서로 어긋나게 잡아야 한다.
+//   ★★ PA0~PA3 에 도달할 수 있는 것은 USART0 과 USART1 뿐이다(데이터시트 AF 표).
+//     USART1 은 외부플래시(PC6/7/8)가 쓰므로 → OBC SPI 는 **USART0** 이어야 한다.
+//     USART0 은 개발보드에서 VCOM 디버그 콘솔이 쓰던 것인데, 이 위성보드에는
+//     UART 콘솔 배선 자체가 없으므로 콘솔을 포기하고 SPI 로 전용한다.
 //
-//   [LOC 산출] EFR32 Series1 규칙: 같은 LOC 에서 핀이 TX,RX,CLK,CS 순으로 연속하고
-//     LOC 가 +1 되면 각 신호의 핀도 +1 이동한다(본 프로젝트의 USART0 LOC0=PA0/PA1,
-//     USART1 LOC11=PC6/PC7/PC8 로 교차 검증됨).
-//        RX  가 PA6 이려면 : RX#1=PA7 이므로 → RX  LOC0
-//        TX  가 PA7 이려면 : TX#1=PA6 이므로 → TX  LOC2
-//        CLK 가 PA8 → CLK LOC1 / CS 가 PA9 → CS LOC1
+//   ★★ 핵심: 동기 슬레이브 모드에서는 USART 의 TX/RX 핀 기능이 내부적으로 반전된다.
+//     즉 ROUTELOC 의 의미가 마스터일 때와 반대다:
+//        TXLOC 으로 지정한 핀  →  실제로는 **입력(MOSI)** 이 된다
+//        RXLOC 으로 지정한 핀  →  실제로는 **출력(MISO)** 이 된다
+//     따라서 "TXLOC = MOSI 핀", "RXLOC = MISO 핀" 으로 잡아야 한다.
 //
-//   ※ OBC 케이블이 이미 MOSI/MISO 를 교차시켜 놓았다면 RX/TX LOC 를 서로 바꾸면 된다.
-#define OBC_SPI_PERIPHERAL        USART2
-#define OBC_SPI_CLK_IRQn          USART2_RX_IRQn
-#define OBC_SPI_IRQHandler        USART2_RX_IRQHandler
-#define OBC_SPI_CMU_CLOCK         cmuClock_USART2
+//   [근거] Silicon Labs 공식 예제 BRD4253A_EFR32FG12_spi_slave_interrupt:
+//        USART2->ROUTELOC0 = (US2MISO_LOC << RXLOC_SHIFT)    // RX  <- MISO(PA7)
+//                          | (US2MOSI_LOC << TXLOC_SHIFT)    // TX  <- MOSI(PA6)
+//                          | (US2CLK_LOC  << CLKLOC_SHIFT)
+//                          | (US2CS_LOC   << CSLOC_SHIFT);
+//     이 예제는 네 신호 모두 LOC 1 을 쓰며, GPIO 도 MOSI(PA6)=입력 /
+//     MISO(PA7)=푸시풀출력 으로 설정한다(= 방향 반전을 확인해 주는 증거).
+//
+//   [데이터시트 AF 표] efr32fg12p_af_{ports,pins}.h (데이터시트에서 생성):
+//        LOC1 :  TX=PA6   RX=PA7   CLK=PA8   CS=PA9
+//     → 우리가 원하는 PA6/PA7/PA8/PA9 조합이 통째로 LOC1 하나에 들어온다.
+//
+//   ※ 과거에 RX_LOC0 / TX_LOC2 로 잡았던 것은 위 "방향 반전"을 몰라서 생긴 오류다.
+//     그 설정에서는 EFR32 가 PA6(=OBC 의 MOSI)을 출력으로 몰아 충돌시키고,
+//     PA7(=MISO)은 아무도 구동하지 않아 로직애널라이저에 0xFF 로 관측됐다.
+#define OBC_SPI_PERIPHERAL        USART0
+#define OBC_SPI_CLK_IRQn          USART0_RX_IRQn
+#define OBC_SPI_IRQHandler        USART0_RX_IRQHandler
+#define OBC_SPI_CMU_CLOCK         cmuClock_USART0
 
-#define OBC_SPI_MOSI_PORT         gpioPortA   // EXP4  — OBC→EFR32 (슬레이브 입력)
-#define OBC_SPI_MOSI_PIN          6
-#define OBC_SPI_MISO_PORT         gpioPortA   // EXP6  — EFR32→OBC (슬레이브 출력)
-#define OBC_SPI_MISO_PIN          7
-#define OBC_SPI_CLK_PORT          gpioPortA   // EXP8  — OBC 공급
-#define OBC_SPI_CLK_PIN           8
-#define OBC_SPI_CS_PORT           gpioPortA   // EXP10 — OBC 공급(Low 활성)
-#define OBC_SPI_CS_PIN            9
+#define OBC_SPI_MOSI_PORT         gpioPortA   // OBC→EFR32 (슬레이브 입력)
+#define OBC_SPI_MOSI_PIN          0
+#define OBC_SPI_MISO_PORT         gpioPortA   // EFR32→OBC (슬레이브 출력)
+#define OBC_SPI_MISO_PIN          1
+#define OBC_SPI_CLK_PORT          gpioPortA   // OBC 공급
+#define OBC_SPI_CLK_PIN           2
+#define OBC_SPI_CS_PORT           gpioPortA   // OBC 공급(Low 활성)
+#define OBC_SPI_CS_PIN            3
 
-#define OBC_SPI_RX_LOC            0U          // RX  → PA6 (MOSI 선)
-#define OBC_SPI_TX_LOC            2U          // TX  → PA7 (MISO 선)
-#define OBC_SPI_CLK_LOC           1U          // CLK → PA8
-#define OBC_SPI_CS_LOC            1U          // CS  → PA9
+// 네 신호 모두 LOC0 = PA0/PA1/PA2/PA3. (슬레이브 방향 반전은 위 주석 참조)
+#define OBC_SPI_TX_LOC            0U          // TX  라우팅 → PA0 = MOSI (실제로는 입력)
+#define OBC_SPI_RX_LOC            0U          // RX  라우팅 → PA1 = MISO (실제로는 출력)
+#define OBC_SPI_CLK_LOC           0U          // CLK → PA2
+#define OBC_SPI_CS_LOC            0U          // CS  → PA3
 
 // -----------------------------------------------------------------------------
 //                          Static Function Declarations
@@ -94,6 +109,7 @@
 static void     obc_i2c_slave_init(void);
 static void     obc_spi_slave_init(void);
 static void     obc_spi_cs_cb(uint8_t intNo);
+static void     obc_spi_prime_tx(void);
 static void     bootloader_storage_init(void);
 static void     form_network(void);
 
@@ -207,9 +223,82 @@ void obc_spi_inject(const uint8_t *frame, uint16_t len)
 //     OBC 가 읽다가 어긋났다고 판단하면 그냥 계속 읽기만 하면 프레임 선두부터
 //     다시 나온다 — 재전송을 요청하는 별도 명령이 필요 없다.
 //     (프레임은 다음 스윕이 끝날 때까지 그대로 남아 있다 → 수 초의 재시도 여유)
+// 내보낼 배치가 없을 때 MISO 에 실을 값.
+//   ★ 0x00 으로 두면 "정상 동작하며 보낼 게 없는 상태" 와 "선이 Low 에 붙어
+//     있는 고장" 을 구분할 수 없다. 0/1 이 번갈아 나오는 값을 쓰면 파형만 봐도
+//     갈리고, OBC 도 슬레이브 생존을 확인할 수 있다.
+//   0x5A = 01011010. 프레임 magic(0xA5)과 헷갈리지 않도록 다른 값으로 골랐다.
+#define OBC_SPI_IDLE_BYTE   0x5AU
+
+// ─── SPI 송신 DMA ───────────────────────────────────────────────────────────
+//  [왜 DMA 인가]
+//    SPI 슬레이브는 마스터가 클럭을 넣는 시점을 고를 수 없다. 바이트가 나갈
+//    때마다 "다음 바이트"가 송신 레지스터에 미리 들어가 있어야 하는데, 이를
+//    인터럽트로 채우면 바이트당 여유가 6.8us(1.17MHz 기준)뿐이다.
+//    Connect 무선 인터럽트는 우선순위가 더 높고 수십 us 를 점유할 수 있어,
+//    그 사이 클럭이 들어오면 송신 레지스터가 빈 채로 나가 0x00 이 섞인다
+//    (실측 확인: 10바이트 버스트에서 2바이트 결손).
+//    DMA 는 CPU 개입 없이 하드웨어가 직접 채우므로 인터럽트 지연과 무관하다.
+//
+//  [구성] 자기 자신을 링크하는 디스크립터 1개 → 페이로드를 무한 반복 송신.
+//    · 배치가 있으면 : 프레임 전체를 반복 → 마스터가 이어 읽기/재읽기 모두 가능
+//    · 배치가 없으면 : 1바이트 유휴값을 반복 → 슬레이브 생존 표시
+//    한 바퀴 끝날 때마다 done 콜백이 와서 "프레임을 다 내보냈다"를 알 수 있다.
+static unsigned int       spi_dma_ch;
+static bool               spi_dma_ok = false;
+static LDMA_Descriptor_t  spi_dma_desc;
+static LDMA_TransferCfg_t spi_dma_cfg;
+// 유휴 반복용 버퍼.
+//   ★ 1바이트 디스크립터를 자기 링크로 돌리면 바이트마다 LDMA 가 디스크립터를
+//     메모리에서 다시 읽어와야 하고(=버스 경합에 취약) 인터럽트도 초당 수십만
+//     번 발생한다. 실측에서 연속 7바이트 결손이 난 원인이 이것이다.
+//     충분히 큰 버퍼를 한 디스크립터로 덮어 재적재 빈도를 1/N 로 줄인다.
+#define OBC_SPI_IDLE_BUF_LEN  256U
+static uint8_t            spi_dma_idle_buf[OBC_SPI_IDLE_BUF_LEN];
+
+static bool obc_spi_dma_done_cb(unsigned int ch, unsigned int seq, void *user)
+{
+  (void)ch; (void)seq; (void)user;
+  // 페이로드를 한 바퀴 다 내보냈다 = OBC 가 프레임 전체를 받아갔다.
+  if (obc_tx_payload > 0U) spi_tx_done = true;
+  return true;   // true = 전송 계속(자기 링크라 다음 바퀴가 이어진다)
+}
+
+// src 를 len 바이트만큼 USART TXDATA 로 무한 반복 송신하도록 DMA 를 재무장한다.
+//   want_done : 한 바퀴 끝날 때 콜백을 받을지 여부.
+//     실데이터 프레임(수십 KB)은 한 바퀴에 한 번이라 부담이 없지만,
+//     유휴 반복에는 불필요하므로 꺼서 인터럽트 부하를 없앤다.
+static void obc_spi_dma_arm(const volatile uint8_t *src, uint16_t len,
+                            bool want_done)
+{
+  if (!spi_dma_ok || len == 0U) return;
+  DMADRV_StopTransfer(spi_dma_ch);
+
+  spi_dma_cfg  = (LDMA_TransferCfg_t)
+                 LDMA_TRANSFER_CFG_PERIPHERAL(ldmaPeripheralSignal_USART0_TXBL);
+  // linkjmp = 0 → 같은 디스크립터를 다시 실행 = 처음부터 무한 반복
+  spi_dma_desc = (LDMA_Descriptor_t)
+                 LDMA_DESCRIPTOR_LINKREL_M2P_BYTE((const void *)src,
+                                                  &(OBC_SPI_PERIPHERAL->TXDATA),
+                                                  len, 0);
+  spi_dma_desc.xfer.doneIfs = want_done ? 1U : 0U;
+
+  DMADRV_LdmaStartTransfer((int)spi_dma_ch, &spi_dma_cfg, &spi_dma_desc,
+                           want_done ? obc_spi_dma_done_cb : NULL, NULL);
+}
+
+// 유휴(배치 없음) 상태로 되돌린다 — 유휴 바이트를 반복 송신.
+static void obc_spi_dma_idle(void)
+{
+  for (unsigned i = 0; i < OBC_SPI_IDLE_BUF_LEN; i++) {
+    spi_dma_idle_buf[i] = OBC_SPI_IDLE_BYTE;
+  }
+  obc_spi_dma_arm(spi_dma_idle_buf, OBC_SPI_IDLE_BUF_LEN, false);
+}
+
 static uint8_t obc_next_tx_byte(volatile uint16_t *idx, volatile bool *done)
 {
-  if (obc_tx_payload == 0U) return 0x00U;
+  if (obc_tx_payload == 0U) return OBC_SPI_IDLE_BYTE;
   uint8_t b = obc_tx_buf[*idx];
   if (++(*idx) >= obc_tx_payload) {
     *done = true;      // 한 바퀴 전부 내보냄 = 회수 완료로 간주
@@ -220,6 +309,7 @@ static uint8_t obc_next_tx_byte(volatile uint16_t *idx, volatile bool *done)
 
 static void obc_spi_prime_tx(void)
 {
+  if (spi_dma_ok) return;   // DMA 가 송신을 전담 → 소프트웨어 선적재 불필요
   OBC_SPI_PERIPHERAL->CMD = USART_CMD_CLEARTX;   // 이전 트랜잭션 잔여 바이트 제거
   OBC_SPI_PERIPHERAL->TXDATA = obc_next_tx_byte(&spi_tx_idx, &spi_tx_done);
 }
@@ -237,7 +327,11 @@ void obc_stage_iq_readback(void)
   if (obc_tx_payload > obc_tx_len) obc_tx_payload = obc_tx_len;
   i2c_tx_idx  = 0;  i2c_tx_done = false;
   spi_tx_idx  = 0;  spi_tx_done = false;   // 새 배치 → 프레임 선두(magic)부터
-  obc_spi_prime_tx();
+  if (spi_dma_ok) {
+    obc_spi_dma_arm(obc_tx_buf, obc_tx_payload, true);  // 프레임 전체 반복 송신
+  } else {
+    obc_spi_prime_tx();
+  }
 }
 
 // 스테이징된 프레임이 버스로 빠져나갔는가?
@@ -430,7 +524,12 @@ static void obc_spi_slave_init(void)
   //   그 결과 존재하지도 않는 OBC 명령이 실행된다(예: 가짜 0x05 → 혼자 미션 시작
   //   → 측정 채널을 돌아다녀 RX 가 join 하지 못함).
   //   CS 는 비활성이 High 이므로 풀업, CLK/MOSI 는 SPI mode0 유휴가 Low 이므로 풀다운.
-  GPIO_PinModeSet(OBC_SPI_MOSI_PORT, OBC_SPI_MOSI_PIN, gpioModeInputPull, 0);  // 풀다운
+  //   ★ MOSI 는 풀저항을 걸지 않는다(공식 spidrv / 공식 예제 모두 gpioModeInput).
+  //     풀저항을 걸면 마스터가 그 선을 잡고 있는 힘과 저항분배로 겨루게 되어
+  //     DC 레벨이 문턱 쪽으로 끌려오고, 무선 송신 순간의 노이즈만으로도 문턱을
+  //     넘나들어 MOSI 에만 좁은 스파이크가 찍힌다(실측 확인).
+  //     CLK/CS 는 미연결 시 오동작(허위 클럭·허위 CS)을 막아야 하므로 풀을 유지한다.
+  GPIO_PinModeSet(OBC_SPI_MOSI_PORT, OBC_SPI_MOSI_PIN, gpioModeInput, 0);   // 풀 없음
   GPIO_PinModeSet(OBC_SPI_MISO_PORT, OBC_SPI_MISO_PIN, gpioModePushPull,  0);
   GPIO_PinModeSet(OBC_SPI_CLK_PORT,  OBC_SPI_CLK_PIN,  gpioModeInputPull, 0);  // 풀다운
   GPIO_PinModeSet(OBC_SPI_CS_PORT,   OBC_SPI_CS_PIN,   gpioModeInputPull, 1);  // 풀업
@@ -470,8 +569,18 @@ static void obc_spi_slave_init(void)
 
   USART_Enable(OBC_SPI_PERIPHERAL, usartEnable);
 
-  // 첫 바이트를 미리 실어 둔다(마스터가 언제 클럭을 넣을지 모르므로).
-  obc_spi_prime_tx();
+  // ─── 송신 DMA 기동 ────────────────────────────────────────────────────────
+  //   실패해도 치명적이지 않다(기존 인터럽트 방식으로 자동 폴백). 다만 그 경우
+  //   대량 전송에서 바이트 결손이 생길 수 있으므로 로그로 분명히 남긴다.
+  if (DMADRV_Init() == ECODE_EMDRV_DMADRV_OK
+      && DMADRV_AllocateChannel(&spi_dma_ch, NULL) == ECODE_EMDRV_DMADRV_OK) {
+    spi_dma_ok = true;
+    obc_spi_dma_idle();     // 배치가 없는 동안은 유휴 바이트를 반복 송신
+  } else {
+    spi_dma_ok = false;
+    app_log_error("SPI: DMA unavailable — falling back to IRQ TX (byte loss possible)\n");
+    obc_spi_prime_tx();
+  }
 
 
   // CS 상승 에지 = 트랜잭션 종료 → 명령 해석 요청.
@@ -480,10 +589,8 @@ static void obc_spi_slave_init(void)
   GPIO_ExtIntConfig(OBC_SPI_CS_PORT, OBC_SPI_CS_PIN, OBC_SPI_CS_PIN,
                     true /*rising*/, false /*falling*/, true /*enable*/);
 
-  app_log_info("SPI Slave initialized (USART2: MOSI=PA6/RX#%u MISO=PA7/TX#%u "
-               "CLK=PA8/#%u CS=PA9/#%u)\n",
-               (unsigned)OBC_SPI_RX_LOC, (unsigned)OBC_SPI_TX_LOC,
-               (unsigned)OBC_SPI_CLK_LOC, (unsigned)OBC_SPI_CS_LOC);
+  app_log_info("SPI Slave initialized (USART0 LOC%u: MOSI=PA0 MISO=PA1 CLK=PA2 CS=PA3)\n",
+               (unsigned)OBC_SPI_TX_LOC);
 }
 
 /**************************************************************************//**
@@ -516,8 +623,11 @@ void OBC_SPI_IRQHandler(void)
       obc_rx_buffer[obc_rx_len++] = rx;
     }
 
-    // 송신: 다음 바이트를 즉시 실어 둔다(다음 클럭에 나감).
-    OBC_SPI_PERIPHERAL->TXDATA = obc_next_tx_byte(&spi_tx_idx, &spi_tx_done);
+    // 송신: DMA 가 담당하므로 여기서 TXDATA 를 건드리면 안 된다(이중 기록).
+    //   DMA 실패로 폴백한 경우에만 소프트웨어로 채운다.
+    if (!spi_dma_ok) {
+      OBC_SPI_PERIPHERAL->TXDATA = obc_next_tx_byte(&spi_tx_idx, &spi_tx_done);
+    }
   }
 
   USART_IntClear(OBC_SPI_PERIPHERAL, flags);
@@ -541,7 +651,7 @@ static void obc_spi_cs_cb(uint8_t intNo)
     obc_cmd_ready = true;         // tick 에서 process_obc_command() 가 해석
   }
   obc_rx_len = 0;
-  obc_spi_prime_tx();       // 다음 트랜잭션이 프레임 선두부터 나가도록 재선적재
+  obc_spi_prime_tx();       // (폴백 모드 전용) 다음 트랜잭션 선적재
 }
 
 /**************************************************************************//**

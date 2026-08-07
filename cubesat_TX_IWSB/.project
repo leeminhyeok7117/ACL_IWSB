@@ -421,11 +421,6 @@
 			<locationURI>STUDIO_SDK_LOC/protocol/flex/libs/libconnect-parent-support-library-efr32xg1x-gcc.a</locationURI>
 		</link>
 		<link>
-			<name>gecko_sdk_4.5.0/protocol/flex/libs/libconnect-radio-stream-library-efr32xg1x-gcc.a</name>
-			<type>1</type>
-			<locationURI>STUDIO_SDK_LOC/protocol/flex/libs/libconnect-radio-stream-library-efr32xg1x-gcc.a</locationURI>
-		</link>
-		<link>
 			<name>gecko_sdk_4.5.0/protocol/flex/libs/libconnect-stack-common-library-efr32xg1x-gcc.a</name>
 			<type>1</type>
 			<locationURI>STUDIO_SDK_LOC/protocol/flex/libs/libconnect-stack-common-library-efr32xg1x-gcc.a</locationURI>

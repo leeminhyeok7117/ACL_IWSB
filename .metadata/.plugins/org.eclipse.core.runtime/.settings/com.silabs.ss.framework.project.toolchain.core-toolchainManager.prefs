@@ -1,4 +1,4 @@
-defaultSelection=\u0000
+defaultSelection=com.silabs.ss.tool.ide.arm.toolchain.gnu.cdt\:12.2.1.20221205\u0000
 disabledIDs=\u0000
 eclipse.preferences.version=1
 enabledIDs=\u0000com.silabs.ss.framework.project.core.noToolChain\:0.0.0\u0000com.silabs.ss.tool.ide.arm.toolchain.gnu.cdt\:12.2.1.20221205\u0000
