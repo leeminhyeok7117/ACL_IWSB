@@ -65,6 +65,12 @@ typedef struct __attribute__((packed)) {
 //     [5]frag_idx [6]n_frags [7]n_samp(이 조각의 복소샘플 수)
 //     [8..]= iq bytes  (n_samp * 4, little-endian  I_lo I_hi Q_lo Q_hi …)
 // ─────────────────────────────────────────────────────────────────────────────
+// [중계] Master 로 직접 못 보낸 레코드를 형제 노드에게 브로드캐스트로 넘긴다.
+//   payload 구조는 MSG_TYPE_IQ_REPORT 와 완전히 동일하고 타입 바이트만 다르다.
+//   이를 받은 형제는 타입을 IQ_REPORT 로 바꿔 Master 에게 유니캐스트로 전달한다.
+//   ★ 형제가 다시 중계하지는 않는다(타입이 REPORT 로 바뀌므로 루프 불가).
+#define MSG_TYPE_IQ_RELAY   0xC4U
+
 #define MSG_TYPE_IQ_REPORT    0xC3U
 #define IQ_REPORT_HDR         8U      // 위 헤더 바이트 수
 // 한 프래그먼트에 담는 복소샘플 수(Connect 앱 페이로드 ~111B 안에서 안전).
@@ -104,7 +110,9 @@ typedef struct __attribute__((packed)) {
 //   [3] sweeps_total     : 미션 전체 스윕 수 (100)
 //   [4] batch_ready      : 1=이 프레임에 새 배치가 실려 있음
 //   [5] n_records        : 실려 있는 레코드 수
-//   [6] reserved / [7] reserved
+//   [6] batch_seq       : 배치 일련번호(스테이징할 때마다 +1, 8bit wrap)
+//                         → OBC 가 "같은 배치를 또 읽고 있는지"를 이걸로 구분
+//   [7] reserved        : 0 고정
 //   [8..] 레코드들 (각 IQ_REC_SIZE 고정)
 //
 //   ★ EFR32 는 I2C/SPI 모두 슬레이브라 스스로 전송을 시작할 수 없다. 그래서

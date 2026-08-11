@@ -1,6 +1,0 @@
-20:37:43 **** Incremental Build of configuration GNU ARM v12.2.1 - Default for project cubesat_RX ****
-make -j16 all 
-make: 'all'을(를) 위해 할 일이 없습니다.
-
-20:37:44 Build Finished. 0 errors, 0 warnings. (took 184ms)
-

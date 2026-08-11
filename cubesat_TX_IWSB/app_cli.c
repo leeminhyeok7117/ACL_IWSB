@@ -635,7 +635,14 @@ void cli_iq_dump(sl_cli_command_arg_t *arguments)
   // ★ 전용 버퍼를 따로 두지 않는다(33KB 중복 방지). OBC 리드백과 같은 공용
   //   스테이징 버퍼를 그대로 재사용한다 — 내용/형식이 완전히 동일하므로
   //   CLI 덤프가 곧 "OBC 가 받게 될 바이트"를 그대로 보여주는 셈이다.
-  obc_stage_iq_readback();
+  // ★ 링에 아직 안 옮긴 레코드가 있을 때만 새로 만든다.
+  //   스윕이 끝나면 tick 이 이미 obc_stage_iq_readback() 으로 링을 프레임 버퍼로
+  //   전부 옮겨 둔다(링은 비어 있음). 그 상태에서 여기서 또 스테이징하면
+  //   빈 링으로 프레임을 다시 만들어 n_records=0 으로 덮어써 버린다 —
+  //   보려던 데이터를 보는 행위가 지워 버리는 셈이다.
+  if (iq_readback_count() > 0U) {
+    obc_stage_iq_readback();
+  }
   uint16_t n = 0;
   const uint8_t *buf = obc_readback_buffer(&n);
   if (buf == NULL || n == 0U) {
@@ -651,6 +658,21 @@ void cli_iq_dump(sl_cli_command_arg_t *arguments)
   uint16_t off  = IQ_FRAME_HDR;
   app_log_info("[IWSB] mission=%u sweeps=%u/%u batch_ready=%u n_records=%u\n",
                buf[1], buf[2], buf[3], buf[4], (unsigned)nrec);
+  // [중계 검증] 어느 노드의 데이터가 몇 건 들어왔는지 먼저 요약한다.
+  //   격리 시험에서 "끊어 놓은 노드의 rx_id 가 오는가"를 6000 줄을 넘기지 않고
+  //   바로 확인하기 위한 것.
+  {
+    uint16_t per_rx[5] = { 0, 0, 0, 0, 0 };
+    uint16_t o = IQ_FRAME_HDR;
+    for (uint8_t r = 0; r < nrec; r++) {
+      uint8_t id = buf[o + 1];
+      if (id < 5U) per_rx[id]++;
+      o += IQ_REC_SIZE;
+    }
+    app_log_info("[IWSB] rx_id별 레코드: TX(0)=%u  n1=%u  n2=%u  n3=%u  n4=%u\n",
+                 per_rx[0], per_rx[1], per_rx[2], per_rx[3], per_rx[4]);
+  }
+
   app_log_info("tx_id,rx_id,channel,seq,sample_idx,I,Q\n");
   for (uint8_t r = 0; r < nrec; r++) {
     uint8_t tx_id = buf[off + 0], rx_id = buf[off + 1];

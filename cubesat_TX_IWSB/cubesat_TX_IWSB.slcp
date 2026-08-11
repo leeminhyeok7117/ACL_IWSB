@@ -52,7 +52,7 @@ component:
 - {id: connect_stack_counters}
 - {id: device_init}
 - {id: emlib_i2c}
-- {id: iostream_recommended_stream}
+- {id: iostream_rtt}
 - {id: iostream_retarget_stdio}
 - {id: mpu}
 - {id: nvm3_default}

@@ -90,6 +90,11 @@ static inline void block_sleep_while_unjoined(bool block)
 // -----------------------------------------------------------------------------
 //                          Static Function Declarations
 // -----------------------------------------------------------------------------
+// [IQ 중계] 전방 선언 — 구현은 아래 정의부 참조.
+static void iq_send_frag_of(const iq_record_t *rec, uint8_t frag_idx,
+                            uint8_t msg_type, EmberNodeId dest);
+static void iq_relay_tx_tick(void);
+static void iq_relay_forward(const uint8_t *p, uint8_t len);
 static void handle_poll_request(EmberIncomingMessage *message);
 static void send_poll_response(EmberNodeId requester);
 static void handle_ota_prepare_msg(EmberIncomingMessage *message);
@@ -197,8 +202,44 @@ static uint16_t         meas_iq_n         = 0;      // 이번 라운드 캡처�
 static bool             meas_iq_done      = false;  // 이번 라운드 캡처 완료 여부
 static uint8_t          meas_iq_frag      = 0;      // 다음 전송할 프래그먼트 인덱스
 
+// ─── [IQ 중계] Master 로 직접 못 보낸 레코드를 형제 노드를 거쳐 전달 ─────────
+//  [왜 필요한가]
+//    각 노드는 자기가 측정한 IQ 를 Master 에게 직접 유니캐스트로 보낸다. 그런데
+//    Master 와의 링크만 나빠지면(예: 날개 전개로 이 노드만 가려짐) 그 노드가
+//    측정한 값 — 형제끼리 측정한 것까지 포함해 — 이 전부 사라진다.
+//  [해결]
+//    송신이 실패하면 그 레코드를 큐에 넣고, home 채널에서 브로드캐스트로
+//    형제들에게 뿌린다(MSG_TYPE_IQ_RELAY). 이를 들은 형제는 같은 프레임을
+//    Master 에게 유니캐스트로 그대로 넘긴다. rx_id 는 원래 측정자 값을 유지하므로
+//    Master 는 누가 측정한 값인지 정확히 안다.
+//    부수 효과: 브로드캐스트는 Master 도 직접 듣는다. 링크가 비대칭(데이터는
+//    가는데 ACK 만 유실)이면 형제를 거치지 않고 여기서 바로 복구된다.
+//  [왜 브로드캐스트인가]
+//    이 노드는 스타 자식이라 형제의 주소를 모르고, 형제로의 유니캐스트는
+//    코디네이터(Master)를 거치므로 Master 링크가 끊긴 상황에서 무의미하다.
+//    브로드캐스트는 MAC 레벨이라 형제에게 직접 닿는다(MEAS_BEACON 과 동일 원리).
+#define IQ_RELAY_QLEN   8U          // 링 크기 8 → 실보관 7건 (7 × 261B ≈ 1.8KB)
+static iq_record_t      iq_relay_q[IQ_RELAY_QLEN];
+static uint8_t          iq_relay_head = 0;
+static uint8_t          iq_relay_tail = 0;
+static uint8_t          iq_relay_frag = 0;      // 현재 브로드캐스트 중인 조각
+static uint32_t         iq_relay_tick = 0;      // 조각 간격 타이머
+static volatile bool    iq_send_failed = false; // 콜백→tick 인계: 리포트 전송이 실패했나
+
+static uint8_t iq_relay_count(void)
+{
+  return (uint8_t)((iq_relay_head - iq_relay_tail) & (uint8_t)(IQ_RELAY_QLEN - 1U));
+}
+
 static void meas_rx_tick(void);
 static void meas_rx_send_iq_frag(uint8_t frag_idx);
+
+// 마지막 조각(n4 frag3)이 수집창(MEAS_COLLECT_MS) 안에 들어가는지 컴파일 단계에서 확인.
+//   벗어나면 Master 가 이미 다음 라운드로 넘어간 뒤 도착해 통째로 버려진다.
+_Static_assert(MEAS_REPORT_BASE_MS
+                 + (4U * IQ_N_FRAGS - 1U) * MEAS_REPORT_STEP_MS
+                 < MEAS_COLLECT_MS,
+               "IQ report schedule overflows the collect window");
 
 // -----------------------------------------------------------------------------
 //                          Public Function Definitions
@@ -217,6 +258,11 @@ void emberAfIncomingMessageCallback(EmberIncomingMessage *message)
     }
     if (msg_type == MSG_TYPE_OTA_PREPARE) {
       handle_ota_prepare_msg(message);
+      return;
+    }
+    // ─── [IQ 중계] 형제가 Master 로 못 보낸 조각 → 내가 대신 전달 ─────────────
+    if (msg_type == MSG_TYPE_IQ_RELAY) {
+      iq_relay_forward(message->payload, (uint8_t)message->length);
       return;
     }
     // ─── [RSSI 측정] TX 의 라운드 명령 → tick 에 인계(채널전환은 콜백에서 안 함) ──
@@ -253,7 +299,21 @@ void emberAfIncomingMessageCallback(EmberIncomingMessage *message)
 
 void emberAfMessageSentCallback(EmberStatus status, EmberOutgoingMessage *message)
 {
-  (void)message;
+  // [IQ 중계] Master 로 보낸 IQ 리포트가 실패했는지 먼저 본다.
+  //   아래의 "측정 중엔 실패를 무시" 가드보다 앞에 두어야 한다(리포트는 측정
+  //   상태에서 나가므로, 뒤에 두면 실패를 영영 못 본다).
+  if (status != EMBER_SUCCESS && message != NULL && message->length > 0
+      && message->payload != NULL
+      && message->payload[0] == MSG_TYPE_IQ_REPORT) {
+    iq_send_failed = true;
+  }
+  // [IQ 중계] 중계 방송(브로드캐스트)의 실패는 부모 도달성과 무관하다 —
+  //   soft-rejoin 판정에 넣지 않는다(위 옵션 주석과 함께 이중 방어).
+  if (message != NULL && message->length > 0 && message->payload != NULL
+      && message->payload[0] == MSG_TYPE_IQ_RELAY) {
+    return;
+  }
+
   if (status == EMBER_SUCCESS) {
     consec_send_fails = 0;
     return;
@@ -440,6 +500,11 @@ void emberAfTickCallback(void)
 
   // ─── [RSSI 측정] 라운드 상태머신 (가입 + 비-OTA 일 때만) ─────────────────────
   meas_rx_tick();
+
+  // ─── [IQ 중계] 미전달 레코드를 형제들에게 뿌린다(측정 쉬는 동안만) ──────────
+  if (!ota_download_active) {
+    iq_relay_tx_tick();
+  }
 
   // ─── [H-1] OTA 슬롯 erase defer ─────────────────────────────────────────
   // 메시지 콜백에서 직접 erase 하면 수백ms 블로킹 → 여기서 처리
@@ -767,12 +832,36 @@ static void meas_rx_tick(void)
   //   프래그먼트끼리도 IQ_FRAG_GAP_MS 간격을 둬 TX 큐 고갈/충돌을 막는다.
   if (meas_rx_state == MEAS_RX_REPORTING) {
     uint32_t since = sl_sleeptimer_tick_to_ms(now - meas_report_due);
-    uint32_t due   = (uint32_t)my_device_id * MEAS_REPORT_GAP_MS
-                     + (uint32_t)meas_iq_frag * IQ_FRAG_GAP_MS;
+    // 16개 슬롯(노드 4 × 조각 4)을 겹치지 않게 배치 — 헤더의 상수 주석 참조.
+    //   device_id 는 1~4. 미프로비저닝(0xFF)이면 조인하지 않아 여기 오지 않지만,
+    //   방어적으로 묶어 둔다(슬롯 인덱스가 폭주해 수집창을 벗어나지 않게).
+    uint8_t  dev  = (my_device_id >= 1U && my_device_id <= 4U) ? my_device_id : 1U;
+    uint32_t slot = (uint32_t)(dev - 1U) * IQ_N_FRAGS + meas_iq_frag;
+    uint32_t due  = MEAS_REPORT_BASE_MS + slot * MEAS_REPORT_STEP_MS;
     if (since >= due) {
       meas_rx_send_iq_frag(meas_iq_frag);
       meas_iq_frag++;
       if (meas_iq_frag >= IQ_N_FRAGS) {
+        // [IQ 중계] 조각 중 하나라도 Master 로 못 갔으면 형제를 통해 재시도한다.
+        //   Master 는 조각이 전부 모여야 레코드를 확정하므로, 부분 실패도
+        //   결국 레코드 전체 유실이다 → 레코드 통째로 큐에 넣는다.
+        if (iq_send_failed && meas_iq_n > 0) {
+          iq_record_t *r = &iq_relay_q[iq_relay_head];
+          r->tx_id   = meas_cur_tx_id;
+          r->rx_id   = my_device_id;
+          r->channel = meas_cur_channel;
+          r->seq     = meas_cur_seq;
+          r->n_samp  = (meas_iq_n > IQ_SAMPLES_PER_LINK)
+                         ? (uint8_t)IQ_SAMPLES_PER_LINK : (uint8_t)meas_iq_n;
+          for (uint8_t k = 0; k < r->n_samp; k++) r->iq[k] = meas_iq_buf[k];
+          iq_relay_head = (uint8_t)((iq_relay_head + 1U) & (uint8_t)(IQ_RELAY_QLEN - 1U));
+          if (iq_relay_head == iq_relay_tail) {   // 가득 참 → 가장 오래된 것 폐기
+            iq_relay_tail = (uint8_t)((iq_relay_tail + 1U) & (uint8_t)(IQ_RELAY_QLEN - 1U));
+          }
+          app_log_info("[IQ] report to master failed → queued for relay (%u)\n",
+                       (unsigned)iq_relay_count());
+        }
+        iq_send_failed = false;
         meas_rx_set_sleep_block(false);
         meas_rx_state = MEAS_RX_IDLE;
       }
@@ -812,8 +901,102 @@ static void meas_rx_send_iq_frag(uint8_t frag_idx)
     p[2] = (uint8_t)((uint16_t)s->q & 0xFF);
     p[3] = (uint8_t)(((uint16_t)s->q >> 8) & 0xFF);
   }
-  emberMessageSend(EMBER_COORDINATOR_ADDRESS, CUSTOM_ENDPOINT, 0,
-                   (uint8_t)(IQ_REPORT_HDR + nsamp * 4U), msg, tx_options);
+  // ★ 반환값을 반드시 본다. MAC 큐가 차 있으면 여기서 즉시 실패하고 큐에 들어가지
+  //   않는데, 그 경우 emberAfMessageSentCallback 은 호출되지 않는다 → 조각이
+  //   흔적 없이 사라지고 iq_send_failed 도 안 켜져 중계까지 발동하지 못한다.
+  if (emberMessageSend(EMBER_COORDINATOR_ADDRESS, CUSTOM_ENDPOINT, 0,
+                       (uint8_t)(IQ_REPORT_HDR + nsamp * 4U), msg, tx_options)
+      != EMBER_SUCCESS) {
+    iq_send_failed = true;
+  }
+}
+
+// [IQ 중계] 레코드 하나의 조각을 지정 타입/목적지로 전송한다.
+//   meas_rx_send_iq_frag() 와 페이로드 형식이 완전히 동일하고, 원본이 되는
+//   레코드와 목적지만 다르다(중계 브로드캐스트 / Master 로의 전달 양쪽에 쓴다).
+static void iq_send_frag_of(const iq_record_t *rec, uint8_t frag_idx,
+                            uint8_t msg_type, EmberNodeId dest)
+{
+  uint16_t start = (uint16_t)frag_idx * IQ_FRAG_SAMPLES;
+  // ★ 실을 샘플이 없어도 "빈 조각(n_samp=0)"을 보내야 한다 — return 하면 안 된다.
+  //   Master 는 frag 비트마스크가 (1<<IQ_N_FRAGS)-1 로 다 차야 레코드를 확정한다.
+  //   캡처가 짧아 n_samp<=60 이면 마지막 조각(샘플 60..63)이 통째로 빠지고,
+  //   마스크가 영원히 0b0111 에 머물러 중계한 레코드가 그대로 버려진다.
+  //   (직접 전송 경로 meas_rx_send_iq_frag() 는 이미 이렇게 처리한다 — 동일하게 맞춘다.)
+  if (start >= rec->n_samp) start = rec->n_samp;
+  uint16_t nsamp = (uint16_t)rec->n_samp - start;
+  if (nsamp > IQ_FRAG_SAMPLES) nsamp = IQ_FRAG_SAMPLES;
+
+  uint8_t msg[IQ_REPORT_HDR + IQ_FRAG_SAMPLES * 4U];
+  msg[0] = msg_type;
+  msg[1] = rec->seq;
+  msg[2] = rec->tx_id;
+  msg[3] = rec->channel;
+  msg[4] = rec->rx_id;          // ★ 원래 측정자 유지 — 중계해도 출처가 안 바뀐다
+  msg[5] = frag_idx;
+  msg[6] = (uint8_t)IQ_N_FRAGS;
+  msg[7] = (uint8_t)nsamp;
+  for (uint16_t k = 0; k < nsamp; k++) {
+    const iq_sample_t *sp = &rec->iq[start + k];
+    uint8_t *p = &msg[IQ_REPORT_HDR + k * 4U];
+    p[0] = (uint8_t)((uint16_t)sp->i & 0xFF);
+    p[1] = (uint8_t)(((uint16_t)sp->i >> 8) & 0xFF);
+    p[2] = (uint8_t)((uint16_t)sp->q & 0xFF);
+    p[3] = (uint8_t)(((uint16_t)sp->q >> 8) & 0xFF);
+  }
+  // ★ 브로드캐스트에는 ACK 라는 것이 없다. tx_options(=ACK_REQUESTED)를 그대로
+  //   쓰면 전송이 실패로 처리되어 두 가지가 동시에 터진다:
+  //     (1) 중계 프레임이 한 바이트도 나가지 않는다 → 중계 기능 자체가 죽는다.
+  //     (2) emberAfMessageSentCallback 에서 consec_send_fails 가 쌓이고,
+  //         중계 방송은 MEAS_RX_IDLE 에서만 나가므로 "측정 중 실패 무시" 가드에도
+  //         걸리지 않는다 → 3회(=60ms) 만에 soft-rejoin, 노드가 네트워크를 이탈한다.
+  //   이 코드베이스의 다른 브로드캐스트(MEAS_CMD / MEAS_BEACON)와 동일하게 맞춘다.
+  EmberMessageOptions opt = (dest == EMBER_BROADCAST_ADDRESS)
+                              ? EMBER_OPTIONS_NONE : tx_options;
+  emberMessageSend(dest, CUSTOM_ENDPOINT, 0,
+                   (uint8_t)(IQ_REPORT_HDR + nsamp * 4U), msg, opt);
+}
+
+// [IQ 중계] 큐에 쌓인 미전달 레코드를 형제들에게 브로드캐스트한다.
+//   측정이 쉬고 있을 때(home 채널, IDLE)만 보내 측정 슬롯을 방해하지 않는다.
+static void iq_relay_tx_tick(void)
+{
+  if (iq_relay_count() == 0U) return;
+  if (meas_rx_state != MEAS_RX_IDLE) return;   // 측정 중엔 채널이 다르다
+  if (!network_joined) return;
+
+  uint32_t now = sl_sleeptimer_get_tick_count();
+  if (sl_sleeptimer_tick_to_ms(now - iq_relay_tick) < IQ_FRAG_GAP_MS) return;
+  iq_relay_tick = now;
+
+  const iq_record_t *r = &iq_relay_q[iq_relay_tail];
+  iq_send_frag_of(r, iq_relay_frag, MSG_TYPE_IQ_RELAY, EMBER_BROADCAST_ADDRESS);
+
+  if (++iq_relay_frag >= IQ_N_FRAGS) {         // 한 레코드 다 뿌림 → 다음 것
+    iq_relay_frag = 0;
+    iq_relay_tail = (uint8_t)((iq_relay_tail + 1U) & (uint8_t)(IQ_RELAY_QLEN - 1U));
+  }
+}
+
+// [IQ 중계] 형제가 뿌린 조각을 받아 Master 로 그대로 넘긴다.
+//   ★ 타입만 IQ_REPORT 로 바꿔 보내므로, 받은 쪽이 다시 중계하지 않는다(루프 불가).
+//   ★ 조립하지 않고 조각 단위로 즉시 전달 — 상태를 안 가져 단순하고 견고하다.
+static void iq_relay_forward(const uint8_t *p, uint8_t len)
+{
+  if (len < IQ_REPORT_HDR) return;
+  if (!network_joined) return;                 // 나도 Master 를 못 보면 소용없다
+  if (ota_download_active) return;             // OTA 중엔 대역폭을 건드리지 않는다
+  uint8_t msg[IQ_REPORT_HDR + IQ_FRAG_SAMPLES * 4U];
+  if (len > sizeof(msg)) len = (uint8_t)sizeof(msg);
+  for (uint8_t i = 0; i < len; i++) msg[i] = p[i];
+  // ★ 타입을 IQ_REPORT 로 바꾸지 않고 IQ_RELAY 그대로 Master 에게 유니캐스트한다.
+  //   (1) 이 전송이 실패해도 emberAfMessageSentCallback 의 IQ_REPORT 검사에
+  //       걸리지 않는다 → 남의 중계 실패를 "내 리포트 실패"로 오인해 내 정상
+  //       레코드를 쓸데없이 재방송하는 일이 없다.
+  //   (2) Master 가 중계본을 직접본과 다른 조립 슬롯에 넣을 수 있다 → 중계 조각의
+  //       frag0 이 진행 중인 직접 전송 조립을 밀어내 레코드를 잃는 일이 없다.
+  //   (3) 유니캐스트라 형제는 이 프레임을 받지 않는다 → 재중계 루프 불가.
+  emberMessageSend(EMBER_COORDINATOR_ADDRESS, CUSTOM_ENDPOINT, 0, len, msg, tx_options);
 }
 
 static void handle_poll_request(EmberIncomingMessage *message)

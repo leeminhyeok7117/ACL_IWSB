@@ -157,6 +157,14 @@ template_contribution:
 - name: cli_command
   priority: 0
   value:
+    name: set_id
+    handler: cli_set_device_id
+    help: Provision this slave's device_id (1-4). Saved to NVM3, survives OTA.
+    argument:
+    - {type: uint8, help: 'device_id: 1~4'}
+- name: cli_command
+  priority: 0
+  value:
     name: set_report_period
     handler: cli_set_report_period
     help: ''

@@ -35,7 +35,12 @@
 #include "fw_guard.h"
 #include "em_usart.h"
 #include "sl_power_manager.h"   // [IQ] 측정 중 sleep 차단(RX 와 타이밍 정합)
-#include "sl_iostream_usart_vcom_config.h"   // 콘솔 주변장치(USART2) 참조
+// 콘솔이 UART(VCOM)일 때만 존재하는 헤더 — RTT 로 전환하면 없어진다.
+#if defined(__has_include)
+#  if __has_include("sl_iostream_usart_vcom_config.h")
+#    include "sl_iostream_usart_vcom_config.h"
+#  endif
+#endif
 #include "iq_capture.h"   // [IQ] RAIL IQ 캡처 코어 + IQ 리포트 프로토콜
 
 // [디버깅] VCOM(USART0) TX가 다 빠질 때까지 대기 → 로그 즉시 표시(sleep로 갇힘 방지)
@@ -47,9 +52,15 @@
 //     여기서도 USART0 을 보면 안 된다(SPI 상태를 읽게 되어 무의미).
 static inline void log_flush(void)
 {
+#if defined(SL_IOSTREAM_USART_VCOM_PERIPHERAL)
   for (uint32_t guard = 0; guard < 100000U; guard++) {
     if (SL_IOSTREAM_USART_VCOM_PERIPHERAL->STATUS & USART_STATUS_TXC) return;
   }
+#else
+  // 콘솔이 RTT 인 빌드: RTT 는 호스트가 폴링해 가져가는 논블로킹 링버퍼라
+  // "다 빠질 때까지 기다린다"는 개념이 없다. 기다릴 대상이 없으므로 no-op.
+  // (RTT 는 NO_BLOCK_TRIM 이라 디버거가 안 붙어 있어도 절대 멈추지 않는다.)
+#endif
 }
 
 // -----------------------------------------------------------------------------
@@ -61,7 +72,7 @@ static inline void log_flush(void)
 #define OBC_CMD_ERASE         0x03   // 스토리지 슬롯 erase
 #define OBC_CMD_START         0x04   // OTA 트리거 [cc][target] target:0=TX자체,1~4=RX
 #define OBC_CMD_IQ_START      0x05   // IQ 측정 캠페인 트리거 [cc][dur_s] (dur_s초 동안 반복)
-#define OBC_CMD_IQ_READ       0x06   // IQ 레코드 1건 리드백 준비(이후 OBC 가 I2C read)
+#define OBC_CMD_IQ_READ       0x06   // 현재 IQ 배치를 정상 수신했다는 ACK
 #define OBC_CMD_DUMMY         0x00   // 호스트 dummy write (무시)
 
 #define OBC_TARGET_TX_SELF    0x00   // START target=0 → TX 자체 펌웨어 설치
@@ -330,7 +341,7 @@ static meas_tx_state_t meas_tx_state = MEAS_TX_IDLE;
 static uint8_t   meas_tx_t        = 0;   // 현재 송신원 device_id (0=TX)
 static uint8_t   meas_tx_ch       = 0;   // 현재 채널(리스트에서 선택된 실제 값)
 static uint8_t   meas_tx_chi      = 0;   // 현재 채널 인덱스(meas_ch_list 안)
-static uint8_t   meas_tx_seq      = 0;   // 라운드 시퀀스(증가)
+static uint8_t   meas_tx_seq      = 0;   // 스윕 시퀀스(스윕 시작 시 한 번만 증가)
 
 // [IQ] 스윕할 채널 목록(축소판) — 21채널 전부 대신 대표 채널만.
 //   한 스윕 레코드 수 = 20링크 × N채널. 링버퍼(IQ_RING_LEN-1)에 다 담기게 개수 조정.
@@ -583,6 +594,7 @@ static void meas_tx_on_iq_report(const uint8_t *p, uint8_t len)
   if ((uint16_t)(IQ_REPORT_HDR + nsamp * 4U) > len) return;   // 길이 정합성
 
   iq_record_t *a = &iq_asm[rx_id];
+
   if (frag_idx == 0U) {          // 새 조립 시작
     a->tx_id   = p[2];
     a->rx_id   = rx_id;
@@ -592,8 +604,16 @@ static void meas_tx_on_iq_report(const uint8_t *p, uint8_t len)
     iq_asm_mask[rx_id]  = 0U;
     iq_asm_nfrag[rx_id] = n_frags;
   }
-  // 조립 일관성: seq 가 바뀌었으면(라운드 교체) 이전 조각 폐기 후 재시작.
-  if (a->seq != p[1] || iq_asm_nfrag[rx_id] != n_frags) {
+  // 조립 일관성: 다른 라운드의 조각이 섞이면 폐기한다.
+  //   ★ seq 만으로는 라운드를 구분할 수 없다 — meas_tx_seq 는 캠페인 시작에서만
+  //     증가하므로 한 스윕의 25 라운드가 전부 같은 seq 다(실측 확인).
+  //     그래서 frag0 을 놓친 라운드의 조각들이 이 검사를 그대로 통과해 직전
+  //     라운드의 조립 버퍼에 섞여 들어갔다 → 엉뚱한 tx_id/channel 을 단 레코드가
+  //     확정되거나, 정상 레코드가 영영 완성되지 못했다.
+  //     라운드를 유일하게 식별하는 값은 (seq, tx_id, channel) 이고 셋 다 이미
+  //     패킷에 실려 있다 — 프로토콜 변경 없이 검사만 강화한다.
+  if (a->seq != p[1] || a->tx_id != p[2] || a->channel != p[3]
+      || iq_asm_nfrag[rx_id] != n_frags) {
     return;   // 어긋난 조각 무시(다음 frag_idx==0 에서 재동기화)
   }
 
@@ -697,7 +717,11 @@ static void meas_tx_advance(void)
     meas_tx_ch  = meas_ch_list[0];
     meas_tx_t++;                       // 다음 송신원
   }
-  meas_tx_seq++;
+  // ★ seq 는 라운드 번호가 아니라 "스윕 번호" 다 — 여기서 증가시키지 않는다.
+  //   OBC 는 리드백 프레임의 레코드들을 seq 로 묶어 "같은 스윕의 결과"임을
+  //   판정한다. 라운드마다 올리면 한 배치 안에서 seq 가 25 종류로 흩어져
+  //   그 묶음이 불가능해진다. 라운드를 구분해야 하는 곳(프래그먼트 조립)은
+  //   seq 대신 (tx_id, channel) 을 함께 보므로 이 값이 상수여도 문제없다.
   if (meas_tx_t > MAX_SLAVES) {     // 0..MAX_SLAVES 송신원 모두 완료
     meas_tx_state      = MEAS_TX_IDLE;
     meas_tx_set_sleep_block(false);   // 저전력 복귀
@@ -805,6 +829,11 @@ uint8_t  iq_mission_batch_ready(void) { return iq_batch_ready ? 1U : 0U; }
 void iq_batch_taken(void)
 {
   iq_batch_ready = false;
+  // ★ 회수된 프레임을 버스에서 내린다(MISO → 유휴 바이트).
+  //   내리지 않으면 다음 스윕이 끝날 때까지 DMA 가 방금 회수한 프레임을 계속
+  //   반복 송신한다. OBC 가 "magic + batch_ready" 만 보고 판단하면 같은 배치를
+  //   새 배치로 오인해 0x06 을 다시 보내고 스윕이 어긋난다.
+  obc_release_iq_readback();
 }
 
 // 스윕 1회 시작 시도. 전제조건이 안 맞으면 아무것도 바꾸지 않고 false 를 돌려주어
@@ -844,6 +873,10 @@ void iq_meas_trigger(uint16_t dur_s)
                   (unsigned)stale);
     iq_ring_reset();
   }
+  // 이전 미션이 버스에 남겨 둔 리드백 프레임도 함께 내린다.
+  //   안 내리면 새 미션의 첫 스윕(~20s) 동안 OBC 가 옛 프레임을 계속 읽어
+  //   (batch_ready=1 로 보이므로) 이미 지난 배치를 새 배치로 오인한다.
+  obc_release_iq_readback();
 
   uint32_t now = sl_sleeptimer_get_tick_count();
   iq_mission_active = true;
@@ -868,6 +901,10 @@ void iq_mission_abort(void)
 {
   if (!iq_mission_active) return;
   iq_mission_active = false;
+  // ★ 중단해도 버스에 남은 배치는 반드시 내린다.
+  //   안 내리면 DMA 가 마지막 프레임을 batch_ready=1 인 채로 무한 반복 송신하고,
+  //   OBC 는 미션이 끝난 줄 모른 채 지난 배치를 새 배치로 계속 오인한다.
+  iq_batch_taken();
   iq_win_active     = false;
   meas_tx_abort();
   app_log_info("[IWSB] mission aborted at sweep %u\n", (unsigned)iq_sweeps_done);
@@ -904,8 +941,13 @@ static void iq_win_tick(void)
     iq_win_active  = false;
     iq_sweeps_done++;
     uint8_t nrec   = iq_readback_count();
-    obc_stage_iq_readback();   // 명령 없이 자동 준비(링 → 프레임 버퍼)
+    // ★ 반드시 스테이징보다 먼저 세운다.
+    //   프레임 헤더 buf[4]=batch_ready 는 iq_readback_drain_all() 안에서
+    //   iq_mission_batch_ready() 를 읽어 채운다. 스테이징 뒤에 세우면 헤더에
+    //   영원히 0 이 박히고, OBC 는 배치가 준비된 것을 절대 알 수 없다
+    //   (→ 0x06 을 못 보냄 → 30s 뒤 배치 폐기 → 미션 내내 데이터 0건).
     iq_batch_ready = true;
+    obc_stage_iq_readback();   // 명령 없이 자동 준비(링 → 프레임 버퍼)
     iq_batch_tick  = now;
     iq_wait_tick   = now;      // 다음 스윕 시작 대기 상한은 이 시점부터 센다
     app_log_info("[IWSB] sweep %u/%u done. batch=%u records (staged)\n",
@@ -933,6 +975,9 @@ static void iq_win_tick(void)
                     (unsigned)(IQ_BATCH_PICKUP_MS / 1000U));
       iq_ring_reset();
       iq_batch_ready = false;
+      // 회수 경로와 동일하게 버스에서도 내린다. 안 내리면 DMA 가 obc_tx_buf 를
+      // 계속 읽는 상태에서 다음 스윕이 같은 버퍼를 덮어써 찢어진 프레임이 나간다.
+      obc_release_iq_readback();
     } else {
       return;   // 아직 0x06 대기 중
     }
@@ -1819,10 +1864,8 @@ void obc_cmd_iq_start_mirror(void)
 }
 
 /**************************************************************************//**
- * CMD 0x06 (iq_read): 쌓인 IQ 레코드 "전부"를 I2C 리드백 버퍼에 준비.
- *   이후 OBC 가 I2C read 한 번으로 전체 프레임을 읽어간다(I2C IRQ 가 스트리밍).
- *   프레임: [n_records] + 레코드들(각 IQ_REC_SIZE 고정). 호출 후 링은 비워짐.
- *   ※ OBC 는 06 write 후 tick 반영까지 수 ms 지연 뒤 read 할 것.
+ * CMD 0x06 (batch ACK): OBC가 현재 배치를 검증·저장했다는 확인.
+ *   이전 프레임을 폐기하고 0x5A idle로 복귀한 뒤 다음 스윕을 진행한다.
  *****************************************************************************/
 static void handle_cmd_iq_read(const uint8_t *buf, uint16_t len)
 {

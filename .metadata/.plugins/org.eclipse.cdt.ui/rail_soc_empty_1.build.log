@@ -1,7 +1,0 @@
-17:42:38 **** Clean-only build of configuration GNU ARM v12.2.1 - Default for project rail_soc_empty_1 ****
-make -j16 clean 
-make: *** 타겟 'clean'을(를) 만들 규칙이 없습니다.  멈춤.
-"make -j16 clean" terminated with exit code 2. Build might be incomplete.
-
-17:42:38 Build Failed. 1 errors, 0 warnings. (took 143ms)
-
