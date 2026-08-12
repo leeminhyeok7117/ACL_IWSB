@@ -35,7 +35,7 @@
 // <o EMBER_CHILD_TABLE_SIZE> Child Table Size <1-64>
 // <i> Default: 16
 // <i> The maximum numbers of children the coordinator can manage. While the maximum size is 64, for range extenders the child table size can not exceed 32 entries.
-#define EMBER_CHILD_TABLE_SIZE                                      (16)
+#define EMBER_CHILD_TABLE_SIZE                                      (64)
 
 // <o EMBER_CHILD_TIMEOUT_SEC> Child Timeout in seconds
 // <i> Default: 3600

@@ -24,6 +24,7 @@
 //  ※ 링크 시 이 strong 정의가 librail 의 weak 정의를 대체한다(중복 아님).
 // -----------------------------------------------------------------------------
 static RAIL_Handle_t s_rail = NULL;
+static int16_t        s_last_stop_st = -1;   // [진단] 마지막 StopTxStream 결과
 static uint8_t       s_rxfifo[IQ_RXFIFO_SIZE] __attribute__((aligned(4)));
 
 RAIL_Status_t RAILCb_SetupRxFifo(RAIL_Handle_t railHandle)
@@ -110,6 +111,21 @@ static void restore_packet_mode(uint8_t resume_channel)
 
 bool iq_radio_is_deaf(void) { return s_radio_deaf; }
 
+// ★ 라디오를 패킷 모드 + 지정 채널 수신으로 되돌린다(RAIL 레벨).
+//   [왜 필요한가]
+//     iq_capture_burst() 와 iq_stream_stop() 은 끝날 때 restore_packet_mode() 로
+//     RAIL_StartRx() 를 직접 호출해 라디오를 "측정 채널" 수신에 묶어 둔다.
+//     스택은 이 사실을 모르기 때문에, 이후 emberSetRadioChannelExtended(home) 은
+//     EMBER_SUCCESS 를 돌려주면서도 실제 채널을 바꾸지 못한다.
+//     (실측: st=0x00 인데 emberGetRadioChannel()==5, 2800 회 강제해도 그대로.
+//      그 사이 폴링·MEAS_CMD·ID_ANNOUNCE 가 전부 끊겨 네트워크가 죽었다.)
+//   → home 복귀도 반드시 RAIL 레벨에서 같이 해 줘야 한다.
+void iq_radio_resume_on(uint8_t channel)
+{
+  if (s_rail == NULL) return;
+  restore_packet_mode(channel);
+}
+
 // tick 에서 주기 호출: 수신 복구가 안 된 상태면 계속 되살리기를 시도한다.
 bool iq_radio_recover(void)
 {
@@ -165,15 +181,27 @@ void iq_stream_abort(void)
   if (s_rail == NULL) {
     return;
   }
-  RAIL_StopTxStream(s_rail);
+  s_last_stop_st = (int16_t)RAIL_StopTxStream(s_rail);
 }
+
+// [진단] 현재 RAIL 라디오 상태. 슬롯이 끝났는데 TX 비트가 남아 있으면
+//   PN9 스트림이 안 꺼진 것이고, 그러면 MAC 이 계속 바빠 채널을 못 옮긴다.
+//   RAIL_RF_STATE_IDLE=1, RX=2, TX=4 (ACTIVE 비트 포함)
+uint8_t iq_radio_state(void)
+{
+  if (s_rail == NULL) return 0xFFU;
+  return (uint8_t)RAIL_GetRadioState(s_rail);
+}
+
+// [진단] 마지막 RAIL_StopTxStream() 반환값(-1 = 아직 호출된 적 없음).
+int16_t iq_last_stop_status(void) { return s_last_stop_st; }
 
 void iq_stream_stop(uint8_t resume_channel)
 {
   if (s_rail == NULL) {
     return;
   }
-  RAIL_StopTxStream(s_rail);
+  s_last_stop_st = (int16_t)RAIL_StopTxStream(s_rail);
   // 송신 모드에서 빠져나온 뒤 패킷 수신을 되살린다(스택은 이 사실을 모르므로
   // 우리가 직접 StartRx 해야 한다 — restore_packet_mode 주석 참조).
   restore_packet_mode(resume_channel);

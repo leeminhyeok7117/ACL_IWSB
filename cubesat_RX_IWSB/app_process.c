@@ -139,7 +139,6 @@ static uint32_t    unjoined_since_tick = 0;   // 미가입 시작 시점(0=가�
 //   이를 soft-rejoin(3회 실패→네트워크 leave)으로 오해하면 OTA가 끊긴다(0x09).
 //   다운로드 동안: soft-rejoin 금지 + ID_ANNOUNCE 전송 억제 + golden 캡처 보류.
 static volatile bool ota_download_active = false;
-
 // ─── [롤백 가드] 헬스 확인 상태 ──────────────────────────────────────────────
 static bool        health_confirmed   = false;
 static bool        boot_tick_set       = false;
@@ -184,8 +183,44 @@ static uint8_t          meas_cur_seq      = 0;       // 처리 중 라운드 파
 static uint8_t          meas_cur_tx_id    = 0;
 static uint8_t          meas_cur_channel  = 0;
 static uint8_t          meas_cur_nbeacons = 0;
-static uint16_t         meas_home_channel = 0;
+// ★ [home 채널] 이 노드가 join 한 네트워크 채널. 라운드마다 다시 읽으면 복귀가
+//   한 번 어긋난 순간 측정 채널이 home 으로 굳어 노드가 조용히 이탈한다
+//   (마스터에서 실측된 것과 동일한 고장이 노드에도 성립한다).
+static uint8_t          meas_home_channel = 0;
+
+// 슬롯 종료용 조용한 복귀. 실패했을 때만 로그.
+static bool meas_home_return(void)
+{
+  // ★ 스택 + RAIL 두 단계. (2) 를 빼면 iq_capture_burst()/iq_stream_stop() 이
+  //   걸어 둔 측정 채널 RX 가 남아 스택 API 가 성공을 돌려주고도 안 움직인다.
+  EmberStatus set_st = emberSetRadioChannelExtended((uint16_t)meas_home_channel, false);
+  iq_radio_resume_on(meas_home_channel);
+  uint16_t after = emberGetRadioChannel();
+  if (after == (uint16_t)meas_home_channel) return true;
+  // 실패는 tick 마다 재시도되므로 로그를 그대로 찍으면 콘솔이 마비된다.
+  // 처음과 이후 256 회마다만 남긴다.
+  static uint32_t fail_n = 0;
+  if ((fail_n & 0xFFU) == 0U) {
+    // ★ 진단 3종: 스택이 뭐라고 답했는지 / 라디오가 무슨 상태인지 /
+    //   PN9 스트림 정지가 성공했는지. setSt=0x00 인데 안 바뀌면 "수락만 하고
+    //   적용 못 함", railState 에 TX(4) 비트가 남아 있으면 스트림이 살아 있는 것.
+    app_log_error("[HOME] return FAILED: ch=%u want=%u setSt=0x%02X "
+                  "railState=0x%02X lastStopSt=%d n=%lu\n",
+                  (unsigned)after, (unsigned)meas_home_channel, (unsigned)set_st,
+                  (unsigned)iq_radio_state(), (int)iq_last_stop_status(),
+                  (unsigned long)fail_n);
+  }
+  fail_n++;
+  return false;
+}
 static uint32_t         meas_win_start    = 0;       // 측정 윈도 시작 tick
+// ─── [진단] MEAS_CMD 수신 → tick 처리까지의 지연 ─────────────────────────────
+//   슬롯 정렬은 이 지연만큼 통째로 밀린다. iq_capture_burst() 는 최대 120ms 를
+//   블로킹하고 flash 기록도 tick 을 굶기므로, 지연이 커지면 이 노드의 슬롯이
+//   마스터 슬롯 밖으로 밀려나 캡처는 노이즈가 되고 리포트는 수집창을 벗어난다.
+//   그 상태가 누적되면 ACK 실패 → soft-rejoin → 이탈로 이어진다.
+static volatile uint32_t meas_cmd_rx_tick = 0;   // 콜백이 찍는 수신 시각
+static uint32_t          meas_lat_max     = 0;   // 관측된 최대 지연(ms)
 static uint32_t         meas_last_beacon  = 0;
 static uint8_t          meas_beacons_sent = 0;
 static int32_t          meas_rssi_sum     = 0;       // 청취 누적(평균용)
@@ -269,6 +304,7 @@ void emberAfIncomingMessageCallback(EmberIncomingMessage *message)
     if (msg_type == MSG_TYPE_MEAS_CMD) {
       if (message->length < 5) return;
       if (ota_download_active) return;            // OTA 중엔 측정 금지
+      meas_cmd_rx_tick = sl_sleeptimer_get_tick_count();   // [진단] 수신 시각 고정
       meas_p_seq      = message->payload[1];
       meas_p_tx_id    = message->payload[2];
       meas_p_channel  = message->payload[3];
@@ -331,11 +367,18 @@ void emberAfMessageSentCallback(EmberStatus status, EmberOutgoingMessage *messag
     consec_send_fails = 0;
     return;
   }
-  app_log_info("TX fail: 0x%02X (%u/%u)\n",
-               status, consec_send_fails + 1, MAX_CONSEC_SEND_FAILS);
+  app_log_info("TX fail: 0x%02X type=0x%02X ch=%u (%u/%u)\n",
+               status, message->payload[0], (unsigned)emberGetRadioChannel(),
+               consec_send_fails + 1, MAX_CONSEC_SEND_FAILS);
 
   if (network_joined && (++consec_send_fails >= MAX_CONSEC_SEND_FAILS)) {
-    app_log_error("Parent unreachable. Soft rejoin.\n");
+    app_log_error("Parent unreachable. Soft rejoin. "
+                  "ch=%u measState=%u netState=0x%02X uptime=%lums latMax=%lums\n",
+                  (unsigned)emberGetRadioChannel(), (unsigned)meas_rx_state,
+                  (unsigned)emberNetworkState(),
+                  (unsigned long)(net_up_tick ?
+                    sl_sleeptimer_tick_to_ms(sl_sleeptimer_get_tick_count() - net_up_tick) : 0UL),
+                  (unsigned long)meas_lat_max);
     consec_send_fails = 0;
     network_joined    = false;
     rejoin_backoff_ms = JOIN_RETRY_MIN_MS;   // backoff 초기화: TX 재부팅 후 빠른 재연결
@@ -471,6 +514,22 @@ void emberAfTickCallback(void)
 
     uint32_t elapsed = sl_sleeptimer_tick_to_ms(now_tick - join_retry_anchor);
 
+    // [진단] 미가입이 길어질 때 10초마다 상태를 남긴다 — "영영 안 돌아오는" 구간에서
+    //   스택이 무슨 상태인지, 재조인을 시도는 하는지가 이 한 줄로 갈린다.
+    {
+      static uint32_t last_hb = 0;
+      if (last_hb == 0U
+          || sl_sleeptimer_tick_to_ms(now_tick - last_hb) >= 10000U) {
+        last_hb = now_tick;
+        app_log_info("[JOIN] unjoined %lums netState=0x%02X inProgress=%u "
+                     "backoff=%lums ch=%u\n",
+                     (unsigned long)sl_sleeptimer_tick_to_ms(now_tick - unjoined_since_tick),
+                     (unsigned)emberNetworkState(), (unsigned)join_in_progress,
+                     (unsigned long)rejoin_backoff_ms,
+                     (unsigned)emberGetRadioChannel());
+      }
+    }
+
     if (join_in_progress) {
       if (elapsed > RESUME_WATCHDOG_MS) {
         app_log_error("Join/resume stalled (%lums). Reset+retry.\n", elapsed);
@@ -497,6 +556,23 @@ void emberAfTickCallback(void)
 
   // 가입 상태 → 미가입 타이머 리셋
   unjoined_since_tick = 0;
+
+  // ★ [home 감시견] 측정이 쉬고 있는데 home 이 아니면 즉시 되돌린다.
+  //   이게 없으면 한 번 어긋난 순간 MEAS_CMD 도 부모 트래픽도 못 듣는
+  //   "조용한 이탈" 이 되고, 스스로는 정상이라 믿어 복구를 시도조차 안 한다.
+  if (meas_rx_state == MEAS_RX_IDLE && !ota_download_active) {
+    uint16_t cur = emberGetRadioChannel();
+    if (cur != (uint16_t)meas_home_channel) {
+      static uint32_t home_fix_n = 0;
+      bool ok = meas_home_return();   // 스택 + RAIL 두 단계로 복귀
+      if ((home_fix_n & 0x3FU) == 0U) {
+        app_log_error("[HOME] ★ off-home ch=%u -> forced %u (ok=%u now=%u) n=%lu\n",
+                      (unsigned)cur, (unsigned)meas_home_channel, (unsigned)ok,
+                      (unsigned)emberGetRadioChannel(), (unsigned long)home_fix_n);
+      }
+      home_fix_n++;
+    }
+  }
 
   // ─── [RSSI 측정] 라운드 상태머신 (가입 + 비-OTA 일 때만) ─────────────────────
   meas_rx_tick();
@@ -735,7 +811,7 @@ static void meas_rx_tick(void)
     meas_stream_guard_armed = false;
     meas_rx_streaming       = false;   // 콜백이 이미 껐다
     app_log_error("[MEAS] stream guard fired (tick starved) — returning home.\n");
-    emberSetRadioChannelExtended(meas_home_channel, false);
+    (void)meas_home_return();
     meas_rx_set_sleep_block(false);
     meas_rx_state = MEAS_RX_IDLE;
   }
@@ -744,7 +820,7 @@ static void meas_rx_tick(void)
   if (ota_download_active) {
     if (meas_rx_state != MEAS_RX_IDLE) {
       meas_rx_stream_stop();   // ★ 최우선: 스트림이 남으면 채널 점유 + OTA 방해
-      emberSetRadioChannelExtended(meas_home_channel, false);
+      (void)meas_home_return();
       meas_rx_set_sleep_block(false);
       meas_rx_state = MEAS_RX_IDLE;
     }
@@ -756,13 +832,28 @@ static void meas_rx_tick(void)
 
   // ─── 새 라운드 명령 처리(IDLE 일 때만 수락) ───────────────────────────────
   if (meas_cmd_pending && meas_rx_state == MEAS_RX_IDLE) {
+    // [진단] 수신 → 처리 지연. 이게 커지면 슬롯이 마스터와 어긋난다.
+    uint32_t lat = sl_sleeptimer_tick_to_ms(now - meas_cmd_rx_tick);
+    if (lat > meas_lat_max) {
+      meas_lat_max = lat;
+      if (lat >= 20U) {
+        app_log_info("[SYNC] cmd latency %lums (new max) seq=%u tx=%u ch=%u\n",
+                     (unsigned long)lat, (unsigned)meas_p_seq,
+                     (unsigned)meas_p_tx_id, (unsigned)(meas_p_channel & 0x7FU));
+      }
+    }
+    if (lat >= 60U) {   // 슬롯(250ms) 의 1/4 이상 밀림 — 정렬이 깨지는 수준
+      app_log_error("[SYNC] LATE cmd %lums — slot misaligned (seq=%u tx=%u ch=%u)\n",
+                    (unsigned long)lat, (unsigned)meas_p_seq,
+                    (unsigned)meas_p_tx_id, (unsigned)(meas_p_channel & 0x7FU));
+    }
     meas_cmd_pending  = false;
     meas_cur_seq      = meas_p_seq;
     meas_cur_tx_id    = meas_p_tx_id;
     meas_cur_channel  = meas_p_channel;
     meas_cur_nbeacons = meas_p_nbeacons;
 
-    meas_home_channel = emberGetRadioChannel();   // 복귀용 home 채널 캡처(보통 0)
+    // ★ home 은 join 채널 고정 — 여기서 다시 읽지 않는다(위 주석 참조).
     meas_rssi_sum = 0; meas_rssi_cnt = 0; meas_last_lqi = 0;
     meas_beacons_sent = 0;
     meas_iq_n = 0; meas_iq_done = false; meas_iq_frag = 0;   // [IQ] 라운드 초기화
@@ -813,7 +904,7 @@ static void meas_rx_tick(void)
     // 슬롯 종료 → home 복귀.
     if (el >= MEAS_SLOT_MS) {
       meas_rx_stream_stop();                   // 보험: 무조건 정지
-      emberSetRadioChannelExtended(meas_home_channel, false);
+      (void)meas_home_return();
       // [IQ] 청취자였고 샘플을 얻었으면 프래그먼트 리포트 예약(device_id 스태거).
       if (meas_cur_tx_id != my_device_id && meas_iq_n > 0) {
         meas_report_due = now;   // 기준 시각; 아래에서 스태거 적용
@@ -1104,6 +1195,7 @@ static void do_join(void)
   EmberNetworkParameters params;
   memset(&params, 0, sizeof(params));
   params.radioChannel = 0;        // ★ 구펌웨어 SLAVE_NETWORK_CHANNEL=0, TX form 채널과 동일
+  meas_home_channel   = params.radioChannel;   // ★ 복귀 기준점(여기서만 정한다)
   params.radioTxPower = 0;
   params.panId        = 0xFFFF;   // ★ 위성 RX 구펌웨어와 동일 PAN (변경 금지)
 

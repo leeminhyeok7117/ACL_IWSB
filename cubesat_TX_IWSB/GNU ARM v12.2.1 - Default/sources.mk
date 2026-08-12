@@ -58,4 +58,5 @@ gecko_sdk_4.5.0/util/silicon_labs/silabs_core/memory_manager \
 gecko_sdk_4.5.0/util/third_party/mbedtls/library \
 gecko_sdk_4.5.0/util/third_party/printf \
 gecko_sdk_4.5.0/util/third_party/printf/src \
+gecko_sdk_4.5.0/util/third_party/segger/systemview/SEGGER \
 

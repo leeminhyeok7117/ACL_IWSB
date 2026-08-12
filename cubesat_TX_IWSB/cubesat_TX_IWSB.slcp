@@ -51,9 +51,10 @@ component:
 - {id: connect_stack_common}
 - {id: connect_stack_counters}
 - {id: device_init}
+- {id: dmadrv}
 - {id: emlib_i2c}
-- {id: iostream_rtt}
 - {id: iostream_retarget_stdio}
+- {id: iostream_rtt}
 - {id: mpu}
 - {id: nvm3_default}
 - {id: printf}

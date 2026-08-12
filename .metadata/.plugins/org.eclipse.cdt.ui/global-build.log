@@ -1,4 +1,4 @@
-17:25:04 **** Incremental Build of configuration GNU ARM v12.2.1 - Default for project cubesat_RX_IWSB ****
+13:53:57 **** Incremental Build of configuration GNU ARM v12.2.1 - Default for project cubesat_RX_IWSB ****
 make -j16 all 
 Building file: ../app_cli.c
 Building file: ../app_init.c
@@ -41,30 +41,30 @@ Running size tool
 arm-none-eabi-size "cubesat_RX_IWSB.axf" -A
 cubesat_RX_IWSB.axf  :
 section                   size        addr
-.text                   162912           0
-.ARM.exidx                   8      162912
-.copy.table                 12      162920
-.zero.table                  0      162932
+.text                   164040           0
+.ARM.exidx                   8      164040
+.copy.table                 12      164048
+.zero.table                  0      164060
 .stack                    8192   536870912
 .data                      528   536879104
-.bss                     14068   536879632
-text_application_ram         0   536893700
-.heap                    10240   536893704
-.nvm                     36864      162932
+.bss                     14088   536879632
+text_application_ram         0   536893720
+.heap                    10240   536893720
+.nvm                     36864      164060
 .ARM.attributes             46           0
 .comment                    69           0
 .debug_line_str            700           0
-.debug_info             526956           0
-.debug_abbrev            88190           0
-.debug_loc              240082           0
-.debug_aranges           13728           0
-.debug_ranges            13936           0
-.debug_line             285352           0
-.debug_str              135265           0
-.debug_frame             50856           0
+.debug_info             528054           0
+.debug_abbrev            88221           0
+.debug_loc              240460           0
+.debug_aranges           13760           0
+.debug_ranges            13992           0
+.debug_line             286222           0
+.debug_str              135420           0
+.debug_frame             50988           0
 .debug_loclists          33259           0
 .debug_rnglists           1970           0
-Total                  1623233
+Total                  1627133
 
 
  

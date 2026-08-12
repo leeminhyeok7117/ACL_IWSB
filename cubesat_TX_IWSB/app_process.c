@@ -145,6 +145,7 @@ extern volatile uint8_t  obc_rx_buffer[];
 extern volatile uint16_t obc_rx_len;
 extern volatile bool     obc_cmd_ready;
 extern volatile uint16_t obc_cmd_len;
+extern uint8_t     g_home_channel;   // ★ form 시점에 확정된 네트워크 home 채널
 extern uint32_t    gbl_image_size;
 extern uint32_t    gbl_write_offset;
 extern uint8_t     ota_image_tag;
@@ -346,13 +347,61 @@ static uint8_t   meas_tx_seq      = 0;   // 스윕 시퀀스(스윕 시작 시 �
 // [IQ] 스윕할 채널 목록(축소판) — 21채널 전부 대신 대표 채널만.
 //   한 스윕 레코드 수 = 20링크 × N채널. 링버퍼(IQ_RING_LEN-1)에 다 담기게 개수 조정.
 //   채널 플랜: base 915MHz + 0.65MHz 간격 (rail_config.c) → 채널 N = 915 + N*0.65 MHz.
-//   아래 5채널 = 915.0 / 918.25 / 921.5 / 924.75 / 928.0 MHz (915 대역 전체에 분포).
+//   ★★ home 채널(0)은 절대 넣지 않는다.
+//     측정 라운드의 송신원은 이 채널 위에서 PN9 스트림을 210ms 연속 송신한다.
+//     목록에 0 이 있으면 25 라운드 중 5 라운드가 "제어 채널을 직접 잼" 하는
+//     셈이라, 그 동안 폴 응답·ID_ANNOUNCE·재조인 요청이 전부 죽는다.
+//     (실측: 매 스윕 [POLL] 직후 TX fail 0x8D=CCA_FAIL / 0x89=TX_INCOMPLETE.
+//      충돌 여부가 폴 5초·announce 30초·스윕 20초 타이머의 위상에 좌우되어
+//      증상이 매번 달라졌다 — join 이 끊기기도, 레코드만 0 이 되기도 했다.)
+//   아래 5채널 = 917.6 / 920.2 / 922.8 / 925.4 / 928.0 MHz.
+//     home(0=915.0MHz)에서 최소 4채널(2.6MHz) 떨어져 인접채널 누설도 피한다.
 //   한 스윕 = 20링크 × 5채널 = 100 레코드(약 19초). 링버퍼(127칸)에 전부 수용.
-//   원하는 채널로 자유롭게 바꿀 수 있음(0..20 범위).
+//   ※ 채널을 바꾸면 OBC 의 IWSB_ChannelIsValid() 도 같이 고쳐야 한다.
 //   ※ 채널 수를 늘리면 20×N ≤ IQ_RING_LEN-1(127) 을 유지할 것.
 static const uint8_t meas_ch_list[] = { 0U, 5U, 10U, 15U, 20U };
 #define MEAS_N_CHANNELS  ((uint8_t)(sizeof(meas_ch_list) / sizeof(meas_ch_list[0])))
-static uint16_t  meas_tx_home     = 0;
+// ─── [★ home 채널 강제] 측정 채널에 눌러앉는 사고를 원인 불문 자가복구 ────────
+//  [실측된 사고]  [HEALTH] sw=1 ... | ch=20  ← 스윕이 끝났는데 마스터가 마지막
+//    측정 채널(20)에 남아 있었다. 그 순간부터 폴링(0x39), MEAS_CMD 브로드캐스트,
+//    자식들의 ID_ANNOUNCE 가 전부 닿지 않아 네트워크가 통째로 죽었다.
+//    자식 테이블에는 노드가 그대로 남아 있었으므로(child=YES) 노드가 떠난 게
+//    아니라 "마스터가 사라진" 것이다.
+//  [왜 이전 수정으로 부족했나]
+//    set 호출의 반환값만 봤다. 그런데 iq_capture_burst() 는 RAIL_StartRx() 로
+//    스택을 우회해 라디오를 되살리므로, set 이 성공을 반환하고도 실제 채널이
+//    어긋날 수 있다. 그러면 재시도 플래그가 안 서고 아무도 복구하지 않는다.
+//  [고친 방식] 원인을 따지지 않는다. "측정 중이 아니면 라디오는 home 에 있다"를
+//    불변식으로 두고, 실제 채널을 읽어 어긋나면 되돌린다(tick 감시).
+
+// 슬롯 종료용 조용한 복귀. 실패했을 때만 로그.
+static bool meas_home_return(void)
+{
+  // ★ 두 단계를 모두 해야 한다 — 순서도 이대로.
+  //   (1) 스택에 채널 의도를 알린다(스택의 송수신 경로가 home 을 쓰게).
+  //   (2) RAIL 을 직접 home 수신으로 되돌린다.
+  //   (2) 를 빼면 iq_capture_burst()/iq_stream_stop() 이 걸어 둔 측정 채널 RX 가
+  //   그대로 살아 있어, (1) 이 EMBER_SUCCESS 를 돌려주고도 라디오는 안 움직인다.
+  EmberStatus set_st = emberSetRadioChannelExtended((uint16_t)g_home_channel, false);
+  iq_radio_resume_on(g_home_channel);
+  uint16_t after = emberGetRadioChannel();
+  if (after == (uint16_t)g_home_channel) return true;
+  // 실패는 tick 마다 재시도되므로 로그를 그대로 찍으면 콘솔이 마비된다.
+  // 처음과 이후 256 회마다만 남긴다.
+  static uint32_t fail_n = 0;
+  if ((fail_n & 0xFFU) == 0U) {
+    // ★ 진단 3종: 스택이 뭐라고 답했는지 / 라디오가 무슨 상태인지 /
+    //   PN9 스트림 정지가 성공했는지. setSt=0x00 인데 안 바뀌면 "수락만 하고
+    //   적용 못 함", railState 에 TX(4) 비트가 남아 있으면 스트림이 살아 있는 것.
+    app_log_error("[HOME] return FAILED: ch=%u want=%u setSt=0x%02X "
+                  "railState=0x%02X lastStopSt=%d n=%lu\n",
+                  (unsigned)after, (unsigned)g_home_channel, (unsigned)set_st,
+                  (unsigned)iq_radio_state(), (int)iq_last_stop_status(),
+                  (unsigned long)fail_n);
+  }
+  fail_n++;
+  return false;
+}
 static uint32_t  meas_tx_t0       = 0;   // 윈도/수집 시작 tick
 static uint32_t  meas_tx_lastbcn  = 0;
 static uint8_t   meas_tx_bcnsent  = 0;
@@ -749,7 +798,7 @@ static void meas_tx_abort(void)
 {
   if (meas_tx_state == MEAS_TX_IDLE) return;
   meas_tx_stream_stop();   // ★ 최우선: 스트림이 켜진 채 남으면 채널을 계속 점유한다
-  emberSetRadioChannelExtended(meas_tx_home, false);   // 측정 채널에 갇히지 않도록 복귀(home 기본 0)
+  (void)meas_home_return();   // 측정 채널에 갇히지 않도록 복귀(검증 포함)
   meas_tx_state      = MEAS_TX_IDLE;
   meas_tx_set_sleep_block(false);   // 저전력 복귀
   meas_last_end_tick = sl_sleeptimer_get_tick_count();
@@ -840,9 +889,26 @@ void iq_batch_taken(void)
 // 다음 tick 에서 재시도하게 한다. (조건을 미리 확인하므로 tick 마다 로그가 도배되지 않음)
 static bool iq_start_sweep(uint32_t now)
 {
-  if (!emberStackIsUp() || meas_tx_ota_busy() || !iq_capture_ready()) return false;
+  // ★ 어느 조건에 막혔는지 반드시 남긴다. 예전엔 전부 조용히 false 를 돌려줘서
+  //   "180 초 동안 아무 일도 안 일어남 → mission gave up" 의 이유를 알 수 없었다.
+  if (!emberStackIsUp() || meas_tx_ota_busy() || !iq_capture_ready()) {
+    static uint32_t blk_n = 0;
+    if ((blk_n & 0x3FU) == 0U) {   // 폭주 방지(tick 마다 불린다)
+      app_log_error("[IWSB] sweep blocked: stackUp=%u otaBusy=%u(state=%u) railReady=%u n=%lu\n",
+                    (unsigned)(emberStackIsUp() ? 1U : 0U),
+                    (unsigned)(meas_tx_ota_busy() ? 1U : 0U), (unsigned)ota_state,
+                    (unsigned)(iq_capture_ready() ? 1U : 0U), (unsigned long)blk_n);
+    }
+    blk_n++;
+    return false;
+  }
   meas_campaign_start();
-  if (!meas_campaign_active()) return false;   // 시작 실패(다른 캠페인 진행 중 등)
+  if (!meas_campaign_active()) {
+    // meas_campaign_start() 가 조용히 되돌아온 경우 — 상태머신이 IDLE 이 아니다.
+    app_log_error("[IWSB] campaign did not start: measState=%u (stuck?)\n",
+                  (unsigned)meas_tx_state);
+    return false;
+  }
 
   iq_win_deadline = now + sl_sleeptimer_ms_to_tick(IQ_SWEEP_DEADLINE_S * 1000U);
   iq_win_active   = true;
@@ -889,9 +955,10 @@ void iq_meas_trigger(uint16_t dur_s)
   app_log_info("[IWSB] mission start — %u sweeps, batch after each\n",
                (unsigned)IQ_MISSION_SWEEPS);
   if (!iq_start_sweep(now)) {
-    app_log_info("[IWSB] waiting for radio (stack=%u, ota=%u) — will start automatically.\n",
+    app_log_info("[IWSB] waiting for radio (stack=%u, ota=%u state=%u rail=%u) — will start automatically.\n",
                  (unsigned)(emberStackIsUp() ? 1U : 0U),
-                 (unsigned)(meas_tx_ota_busy() ? 1U : 0U));
+                 (unsigned)(meas_tx_ota_busy() ? 1U : 0U), (unsigned)ota_state,
+                 (unsigned)(iq_capture_ready() ? 1U : 0U));
     iq_wait_logged = true;
   }
 }
@@ -908,6 +975,143 @@ void iq_mission_abort(void)
   iq_win_active     = false;
   meas_tx_abort();
   app_log_info("[IWSB] mission aborted at sweep %u\n", (unsigned)iq_sweeps_done);
+}
+
+// ─── [진단] 노드 이탈 추적 ───────────────────────────────────────────────────
+//  [무엇을 알고 싶은가]
+//    실측에서 노드는 링크가 멀쩡한 채로 어느 스윕에 갑자기 사라지고 다시는
+//    돌아오지 않는다. 원인 후보가 세 가지인데 IQ 데이터만으로는 구분이 안 된다:
+//      (a) 노드가 스스로 이탈(soft-rejoin)했고 재조인이 실패한다
+//      (b) 마스터가 자식 테이블에서 노드를 지웠다(child timeout 3600s / 테이블 만석)
+//      (c) 노드는 붙어 있는데 MEAS_CMD 를 못 듣거나 리포트만 못 보낸다
+//    → 스택이 그 노드를 "아직 자식으로 아는가" 를 같이 찍으면 셋이 갈린다.
+//      (a),(b) 는 child=NO, (c) 는 child=YES 로 나타난다.
+
+// ★ [RX 콘솔 없이 진단하기] 노드별 ID_ANNOUNCE 하트비트 카운터.
+//   RX 는 30초마다 ID_ANNOUNCE 를 마스터로 보낸다. 이건 측정과 무관한 순수
+//   "나 아직 네트워크에 있다" 신호라, 마스터 혼자서 노드 생사를 판정할 수 있다.
+//     · IQ 레코드 0 인데 announce 는 계속 옴 → 붙어 있는데 측정만 실패
+//       (MEAS_CMD 를 못 듣거나 슬롯이 어긋남)
+//     · announce 도 끊김 → 진짜 네트워크에서 이탈
+//   RX 보드에 콘솔을 못 붙이는 상황에서 이 구분이 사실상 전부다.
+static uint16_t slave_ann_total[MAX_SLAVES + 1U];
+static uint16_t slave_ann_prev [MAX_SLAVES + 1U];
+static uint32_t slave_ann_tick [MAX_SLAVES + 1U];
+
+// ID_ANNOUNCE 수신 시 호출(핸들러에서). 끊겼다 돌아오면 그 사실을 남긴다.
+static void tx_note_announce(uint8_t device_id)
+{
+  if (device_id > MAX_SLAVES) return;
+  uint32_t nowt = sl_sleeptimer_get_tick_count();
+  if (slave_ann_total[device_id] > 0U
+      && sl_sleeptimer_tick_to_ms(nowt - slave_ann_tick[device_id]) > 90000U) {
+    app_log_info("[HEALTH] ★ n%u ID_ANNOUNCE resumed after %lus silence\n",
+                 (unsigned)device_id,
+                 (unsigned long)(sl_sleeptimer_tick_to_ms(
+                   nowt - slave_ann_tick[device_id]) / 1000UL));
+  }
+  slave_ann_total[device_id]++;
+  slave_ann_tick[device_id] = nowt;
+}
+
+// 스택의 자식 테이블에 이 node_id 가 아직 있는가.
+static bool tx_node_is_child(EmberNodeId id)
+{
+  if (id == EMBER_NULL_NODE_ID) return false;
+  EmberMacAddress a;
+  memset(&a, 0, sizeof(a));
+  a.mode = EMBER_MAC_ADDRESS_MODE_SHORT;
+  a.addr.shortAddress = id;
+  return (emberGetChildInfo(&a, NULL, NULL) == EMBER_SUCCESS);
+}
+
+// [진단] child 테이블 점유 현황. 누수가 있으면 이 숫자가 스윕마다 늘어난다.
+//   Connect 에는 테이블을 훑는 API 가 없으므로 node_id 를 하나씩 조회한다
+//   (스윕당 1회, 64 회 조회 — 20 초에 한 번이라 부담 없음).
+#define TX_CHILD_SCAN_MAX   64U
+static void tx_log_child_table(void)
+{
+  uint8_t n = 0;
+  app_log_info("[HEALTH] child table:");
+  for (uint16_t id = 1U; id <= TX_CHILD_SCAN_MAX; id++) {
+    if (tx_node_is_child((EmberNodeId)id)) {
+      app_log_info(" %04X", (unsigned)id);
+      n++;
+    }
+  }
+  app_log_info("  = %u/%u used\n", (unsigned)n, (unsigned)EMBER_CHILD_TABLE_SIZE);
+  if (n >= (uint8_t)(EMBER_CHILD_TABLE_SIZE - 2U)) {
+    app_log_error("[CHILD] ★ table nearly FULL (%u/%u) — 신규 조인이 거부될 수 있다\n",
+                  (unsigned)n, (unsigned)EMBER_CHILD_TABLE_SIZE);
+  }
+}
+
+// 스윕 종료 시점의 네트워크 건강 상태를 남긴다.
+//   매 스윕 요약 1줄 + "보고한 노드 집합이 바뀐 스윕"에만 상세를 덧붙인다.
+//   (매번 상세를 찍으면 100 스윕 × 5줄 = 500줄이라 정작 전이 순간을 놓친다)
+static void iq_log_sweep_health(void)
+{
+  // 방금 스테이징한 프레임에서 rx_id 별 레코드 수를 센다.
+  uint16_t flen = 0;
+  const uint8_t *f = obc_readback_buffer(&flen);
+  uint16_t per_rx[MAX_SLAVES + 1U];
+  memset(per_rx, 0, sizeof(per_rx));
+  if (f != NULL && flen >= IQ_FRAME_HDR) {
+    uint8_t  nrec = f[5];
+    uint16_t off  = IQ_FRAME_HDR;
+    for (uint8_t r = 0; r < nrec; r++) {
+      if ((uint32_t)off + IQ_REC_SIZE > flen) break;
+      uint8_t id = f[off + 1];
+      if (id <= MAX_SLAVES) per_rx[id]++;
+      off = (uint16_t)(off + IQ_REC_SIZE);
+    }
+  }
+
+  uint8_t mask = 0;
+  for (uint8_t i = 0; i <= MAX_SLAVES; i++) {
+    if (per_rx[i] > 0U) mask |= (uint8_t)(1U << i);
+  }
+
+  app_log_info("[HEALTH] sw=%u rec TX=%u n1=%u n2=%u n3=%u n4=%u | ch=%u stack=%u\n",
+               (unsigned)iq_sweeps_done,
+               (unsigned)per_rx[0], (unsigned)per_rx[1], (unsigned)per_rx[2],
+               (unsigned)per_rx[3], (unsigned)per_rx[4],
+               (unsigned)emberGetRadioChannel(),
+               (unsigned)(emberStackIsUp() ? 1U : 0U));
+
+  // ID_ANNOUNCE 하트비트: 지난 스윕 이후 몇 번 왔는지 + 마지막 수신 후 경과초.
+  //   레코드가 0 인데 여기 숫자가 살아 있으면 "붙어 있는데 측정만 실패" 다.
+  {
+    uint32_t nowt = sl_sleeptimer_get_tick_count();
+    app_log_info("[HEALTH]        ann n1=%u(%lus) n2=%u(%lus) n3=%u(%lus) n4=%u(%lus)\n",
+                 (unsigned)(slave_ann_total[1] - slave_ann_prev[1]),
+                 (unsigned long)(slave_ann_tick[1] ? sl_sleeptimer_tick_to_ms(nowt - slave_ann_tick[1]) / 1000UL : 9999UL),
+                 (unsigned)(slave_ann_total[2] - slave_ann_prev[2]),
+                 (unsigned long)(slave_ann_tick[2] ? sl_sleeptimer_tick_to_ms(nowt - slave_ann_tick[2]) / 1000UL : 9999UL),
+                 (unsigned)(slave_ann_total[3] - slave_ann_prev[3]),
+                 (unsigned long)(slave_ann_tick[3] ? sl_sleeptimer_tick_to_ms(nowt - slave_ann_tick[3]) / 1000UL : 9999UL),
+                 (unsigned)(slave_ann_total[4] - slave_ann_prev[4]),
+                 (unsigned long)(slave_ann_tick[4] ? sl_sleeptimer_tick_to_ms(nowt - slave_ann_tick[4]) / 1000UL : 9999UL));
+    for (uint8_t i = 0; i <= MAX_SLAVES; i++) slave_ann_prev[i] = slave_ann_total[i];
+  }
+  tx_log_child_table();
+
+  // 집단이 바뀐 스윕에서만 노드별 상세 — 이탈/복귀 순간이 여기에 딱 찍힌다.
+  static uint8_t prev_mask = 0xFF;   // 0xFF = 아직 한 번도 안 찍음
+  if (mask == prev_mask) return;
+  app_log_info("[HEALTH] ★ membership changed 0x%02X -> 0x%02X\n",
+               (unsigned)prev_mask, (unsigned)mask);
+  prev_mask = mask;
+  for (uint8_t i = 0; i < MAX_SLAVES; i++) {
+    if (!slave_table[i].registered) continue;
+    EmberNodeId nid = slave_table[i].node_id;
+    app_log_info("[HEALTH]   n%u node=0x%04X online=%u child=%s rec=%u\n",
+                 (unsigned)slave_table[i].device_id, (unsigned)nid,
+                 (unsigned)(slave_table[i].online ? 1U : 0U),
+                 tx_node_is_child(nid) ? "YES" : "NO ",
+                 (unsigned)((slave_table[i].device_id <= MAX_SLAVES)
+                              ? per_rx[slave_table[i].device_id] : 0U));
+  }
 }
 
 // [IWSB 미션] 스윕 완료 감시 → 배치 준비 → 회수 확인 → 다음 스윕.
@@ -953,6 +1157,7 @@ static void iq_win_tick(void)
     app_log_info("[IWSB] sweep %u/%u done. batch=%u records (staged)\n",
                  (unsigned)iq_sweeps_done, (unsigned)IQ_MISSION_SWEEPS,
                  (unsigned)nrec);
+    iq_log_sweep_health();   // ★ 누가 빠졌는지 / 스택은 뭐라고 하는지 한 줄 요약
   }
 
   if (!iq_mission_active) return;
@@ -998,9 +1203,10 @@ static void iq_win_tick(void)
     return;
   }
   if (!iq_wait_logged) {
-    app_log_info("[IWSB] sweep deferred (stack=%u, ota=%u) — retrying.\n",
+    app_log_info("[IWSB] sweep deferred (stack=%u, ota=%u state=%u rail=%u) — retrying.\n",
                  (unsigned)(emberStackIsUp() ? 1U : 0U),
-                 (unsigned)(meas_tx_ota_busy() ? 1U : 0U));
+                 (unsigned)(meas_tx_ota_busy() ? 1U : 0U), (unsigned)ota_state,
+                 (unsigned)(iq_capture_ready() ? 1U : 0U));
     iq_wait_logged = true;
   }
   if (sl_sleeptimer_tick_to_ms(now - iq_wait_tick) >= IQ_START_WAIT_MS) {
@@ -1031,7 +1237,7 @@ static void meas_tx_tick(void)
 
     case MEAS_TX_ROUND_CMD:
       meas_tx_send_cmd();                       // 전 노드에 라운드 통지(브로드캐스트)
-      meas_tx_home     = emberGetRadioChannel();
+      // ★ home 은 g_home_channel(form 채널) 고정 — 여기서 다시 읽지 않는다.
       meas_tx_rssi_sum = 0; meas_tx_rssi_cnt = 0; meas_tx_last_lqi = 0;
       meas_tx_bcnsent  = 0;
       meas_tx_iq_n     = 0; meas_tx_iq_done = false;   // [IQ] 라운드 초기화
@@ -1081,7 +1287,7 @@ static void meas_tx_tick(void)
       }
       if (el >= MEAS_SLOT_MS) {
         meas_tx_stream_stop();                                 // 보험: 무조건 정지
-        emberSetRadioChannelExtended(meas_tx_home, false);     // home 복귀(스택 RX 재개)
+        (void)meas_home_return();                              // home 복귀(검증 포함)
         // [IQ] TX 가 청취자였고 샘플을 얻었으면 자기 레코드를 링에 확정.
         if (meas_tx_t != MEAS_TX_DEVICE_ID && meas_tx_iq_n > 0) {
           iq_record_t rec;
@@ -1132,6 +1338,7 @@ void emberAfIncomingMessageCallback(EmberIncomingMessage *message)
       app_log_error("ID_ANNOUNCE: too short from 0x%04X\n", message->source);
       return;
     }
+    tx_note_announce(message->payload[1]);   // [진단] 하트비트 카운트
     register_slave(message->payload[1], message->source);
     // [EUI64] RX가 EUI-64를 함께 보냈으면 g_eui64_map[] 채우기용으로 출력.
     //   출력 순서 = map 입력 순서(LSB first) → 그대로 복사-붙여넣기 가능.
@@ -1389,6 +1596,22 @@ void emberAfTickCallback(void)
   bool ota_busy = (ota_state != OTA_IDLE
                    && ota_state != OTA_FW_READY_MANUAL
                    && ota_state != OTA_FW_READY);
+  // ★ [home 감시견] 측정 중이 아닌데 home 이 아니면 즉시 되돌린다.
+  //   이 검사가 없으면 어떤 이유로든 한 번 어긋난 순간 네트워크가 영구히 죽는다.
+  if (!meas_campaign_active()) {
+    uint16_t cur = emberGetRadioChannel();
+    if (cur != (uint16_t)g_home_channel) {
+      static uint32_t home_fix_n = 0;
+      bool ok = meas_home_return();   // 스택 + RAIL 두 단계로 복귀
+      // 폭주 방지: 처음과 이후 64 회마다만 남긴다(tick 주기로 재시도하므로).
+      if ((home_fix_n & 0x3FU) == 0U) {
+        app_log_error("[HOME] ★ off-home ch=%u -> forced %u (ok=%u now=%u) n=%lu\n",
+                      (unsigned)cur, (unsigned)g_home_channel, (unsigned)ok,
+                      (unsigned)emberGetRadioChannel(), (unsigned long)home_fix_n);
+      }
+      home_fix_n++;
+    }
+  }
   if (meas_campaign_active()) {
     if (ota_busy) {
       meas_tx_abort();
@@ -1396,11 +1619,18 @@ void emberAfTickCallback(void)
       meas_tx_tick();
       iq_win_tick();                  // [IQ] 마감시한 감시(진행 중에도 필요)
     }
-  } else if (!ota_busy) {
+  } else {
+    // ★ 예전엔 이 블록이 !ota_busy 조건 안에 있었다. OTA 상태가 한 번 꼬이면
+    //   iq_win_tick() 이 아예 호출되지 않아 (1) 왜 멈췄는지 로그가 안 남고
+    //   (2) iq_wait_tick 이 갱신되지 않아 나중에 OTA 가 풀려도 이미 180 초가
+    //   지나 즉시 "mission gave up" 이 되었다. 항상 돌린다 —
+    //   내부의 iq_start_sweep() 이 어차피 OTA 를 확인하므로 안전하다.
     iq_win_tick();                    // [IQ] 스윕 완료 감지 → 창 닫기
-    meas_auto_tick();                 // 자동 모드(기본 OFF): 주기적 재시작
-    if (!meas_campaign_active() && poll_running) {
-      poll_tick();
+    if (!ota_busy) {
+      meas_auto_tick();               // 자동 모드(기본 OFF): 주기적 재시작
+      if (!meas_campaign_active() && poll_running) {
+        poll_tick();
+      }
     }
   }
 
@@ -1727,6 +1957,24 @@ static void register_slave(uint8_t device_id, EmberNodeId node_id)
   for (uint8_t i = 0; i < MAX_SLAVES; i++) {
     if (slave_table[i].registered && slave_table[i].device_id == device_id) {
       if (slave_table[i].node_id != node_id) {
+        // ★★ [슬롯 누수 차단] 이 노드의 옛 child 엔트리를 스택에서 반드시 지운다.
+        //   RX 는 부모를 잃으면 emberResetNetworkState() 후 "신규 조인" 을 한다.
+        //   그때마다 마스터는 새 node_id 와 새 child 엔트리를 배정하는데, 옛
+        //   엔트리는 EMBER_CHILD_TIMEOUT_SEC(3600s) 동안 슬롯을 계속 차지한다.
+        //   → 노드당 몇 번만 재조인해도 child 테이블(16칸)이 차고, 그 뒤로는
+        //     스택이 조인을 거부해 어떤 노드도 영영 복귀하지 못한다.
+        //     (실측 증거: 노드 4대인데 배정된 id 가 0x0002/0x0005/0x0006/0x0007 —
+        //      0x0001/0x0003/0x0004 는 죽은 엔트리가 물고 있었다.)
+        EmberNodeId old_id = slave_table[i].node_id;
+        if (old_id != EMBER_NULL_NODE_ID && old_id != node_id) {
+          EmberMacAddress a;
+          memset(&a, 0, sizeof(a));
+          a.mode = EMBER_MAC_ADDRESS_MODE_SHORT;
+          a.addr.shortAddress = old_id;
+          EmberStatus rs = emberRemoveChild(&a);
+          app_log_info("[CHILD] released stale entry 0x%04X for id=%d (st=0x%02X)\n",
+                       old_id, device_id, rs);
+        }
         app_log_info("Slave id=%d: node_id 0x%04X → 0x%04X\n",
                      device_id, slave_table[i].node_id, node_id);
         slave_table[i].node_id = node_id;
@@ -1817,6 +2065,12 @@ static void process_obc_command(void)
 
   uint8_t cmd = local_buf[0];
 
+  // [진단] OBC 명령이 실제로 도달했는지 — 0x05/0x06 이 안 보이면 SPI 문제다.
+  //   0x00(dummy) 은 스트리밍 중 대량으로 오므로 제외한다.
+  if (cmd != OBC_CMD_DUMMY) {
+    app_log_info("[OBC] CMD 0x%02X len=%u\n", cmd, (unsigned)local_len);
+  }
+
   // 길이가 규격과 다르면 실행하지 않는다(위 obc_cmd_len_ok 주석 참조).
   if (!obc_cmd_len_ok(cmd, local_len)) {
     app_log_error("OBC: rejected CMD 0x%02X (bad len=%u)\n",
@@ -1877,8 +2131,10 @@ static void handle_cmd_iq_read(const uint8_t *buf, uint16_t len)
     return;
   }
   // ★ OBC 가 "데이터 정상 수신" 을 확인해 준 것. 이제서야 다음 스윕을 허가한다.
-  app_log_info("[IWSB] 0x06 ACK — batch %u accepted, next sweep.\n",
-               (unsigned)iq_mission_sweeps_done());
+  app_log_info("[IWSB] 0x06 ACK — batch %u accepted after %lums, next sweep.\n",
+               (unsigned)iq_mission_sweeps_done(),
+               (unsigned long)sl_sleeptimer_tick_to_ms(
+                 sl_sleeptimer_get_tick_count() - iq_batch_tick));
   iq_batch_taken();
 }
 

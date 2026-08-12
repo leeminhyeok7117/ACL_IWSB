@@ -23,6 +23,7 @@
 #include "em_usart.h"
 #include "gpiointerrupt.h"
 #include "em_ldma.h"
+#include "em_rmu.h"   // [진단] 리셋 사유(RSTCAUSE)
 #include "dmadrv.h"
 #include <string.h>
 
@@ -128,6 +129,12 @@ volatile bool     obc_cmd_ready  = false;
 //   SPI 는 CS High 콜백에서 다음 트랜잭션을 위해 obc_rx_len 을 0 으로 되돌리므로,
 //   tick 이 obc_rx_len 을 그대로 읽으면 항상 0 이 되어 명령이 전부 무시된다.
 volatile uint16_t obc_cmd_len    = 0;
+
+// ★ [home 채널] 네트워크를 실제로 form 한 채널. 측정 상태머신이 "돌아갈 곳"의
+//   유일한 기준점이다. 라운드마다 emberGetRadioChannel() 로 다시 읽으면 복귀가
+//   한 번 어긋난 순간 측정 채널이 home 으로 굳어버린다(실측: 마스터가 ch20 에
+//   눌러앉아 폴링·MEAS_CMD·ID_ANNOUNCE 가 전부 끊김).
+uint8_t    g_home_channel    = 0;
 
 uint32_t   gbl_image_size    = 0;
 uint32_t   gbl_write_offset  = 0;
@@ -400,6 +407,33 @@ void emberAfInitCallback(void)
   psa_crypto_init();
   app_log_info("\n=== Master (Sink / OTA Server) — Automated OTA ===\n");
 
+  // ─── [진단] 왜 부팅했는가 ───────────────────────────────────────────────
+  //   실측에서 마스터가 미션 도중 printf 문장 중간에 재부팅했다. 로그를 전혀
+  //   남기지 않고 죽으므로 사유를 하드웨어 레지스터에서 읽어야 한다.
+  //     WDOG    : tick 이 128 초 이상 굶었거나, 하드폴트 후 기본 핸들러 무한루프
+  //     LOCKUP  : 폴트 처리 중 다시 폴트(더블 폴트)
+  //     SYSREQ  : 우리 코드의 NVIC_SystemReset() (fw_guard 자가리셋 등)
+  //     POR/EXT : 전원 재인가 / 리셋핀 — 배선·전원 문제
+  {
+    // ★ emlib 의 RMU_ResetCauseGet() 은 resetCauseMasks[] 로 "가짜" 비트를
+    //   걸러내는데, 조합에 따라 통째로 0 이 나온다(실측: RSTCAUSE=0x00000000).
+    //   원인 판별에는 걸러지지 않은 RAW 레지스터가 필요하다. 둘 다 찍는다.
+    uint32_t raw = RMU->RSTCAUSE;
+    uint32_t rc  = RMU_ResetCauseGet();
+    app_log_info("[BOOT] RSTCAUSE raw=0x%08lX\n", (unsigned long)raw);
+    app_log_info("[BOOT] RSTCAUSE=0x%08lX%s%s%s%s%s%s\n",
+                 (unsigned long)rc,
+                 (rc & RMU_RSTCAUSE_WDOGRST)    ? " WDOG"   : "",
+                 (rc & RMU_RSTCAUSE_LOCKUPRST)  ? " LOCKUP" : "",
+                 (rc & RMU_RSTCAUSE_SYSREQRST)  ? " SYSREQ" : "",
+                 (rc & RMU_RSTCAUSE_PORST)      ? " POR"    : "",
+                 (rc & RMU_RSTCAUSE_EXTRST)     ? " EXT"    : "",
+                 ((rc & (RMU_RSTCAUSE_DVDDBOD | RMU_RSTCAUSE_AVDDBOD
+                         | RMU_RSTCAUSE_DECBOD)) != 0U) ? " BOD" : "");
+    // 다음 부팅에서 이번 사유가 섞이지 않도록 반드시 지운다.
+    RMU_ResetCauseClear();
+  }
+
   // ─── [롤백 가드] 최우선: 부트로더 init 후 즉시 probation/롤백 판단 ─────────
   //   TX는 코디네이터라 자체 OTA로 불량 펌웨어 설치 시 전 네트워크가 마비되고
   //   추가 OTA 경로까지 사라진다(단일 장애점). 롤백 가드가 특히 중요.
@@ -507,6 +541,28 @@ void emberAfInitCallback(void)
 //                          Static Function Definitions
 // -----------------------------------------------------------------------------
 
+// ─── [진단] 하드폴트 포착 ───────────────────────────────────────────────────
+//   startup 파일의 기본 HardFault_Handler 는 무한루프라, 폴트가 나면 128 초 뒤
+//   워치독으로 죽는다 → RSTCAUSE 가 WDOG 로 나와 "tick 굶주림" 과 구분되지 않는다.
+//   여기서 가로채 폴트 사실과 복귀 주소(스택의 PC)를 남기고 즉시 재부팅한다.
+//   콘솔이 RTT(메모리 링버퍼)라 폴트 컨텍스트에서도 기록이 남는다.
+void HardFault_Handler(void)
+{
+  uint32_t *sp;
+  __asm volatile ("tst lr, #4      \n"
+                  "ite eq          \n"
+                  "mrseq %0, msp   \n"
+                  "mrsne %0, psp   \n" : "=r" (sp));
+  // 예외 스택 프레임: [0]R0 [1]R1 [2]R2 [3]R3 [4]R12 [5]LR [6]PC [7]xPSR
+  app_log_error("\n[FAULT] HardFault! PC=0x%08lX LR=0x%08lX xPSR=0x%08lX\n",
+                (unsigned long)sp[6], (unsigned long)sp[5], (unsigned long)sp[7]);
+  app_log_error("[FAULT] CFSR=0x%08lX HFSR=0x%08lX MMFAR=0x%08lX BFAR=0x%08lX\n",
+                (unsigned long)SCB->CFSR, (unsigned long)SCB->HFSR,
+                (unsigned long)SCB->MMFAR, (unsigned long)SCB->BFAR);
+  // RTT 는 메모리 링버퍼라 flush 개념이 없다 — 바로 재부팅해도 기록은 남는다.
+  NVIC_SystemReset();   // SYSREQ 로 재부팅 → 다음 RSTCAUSE 가 WDOG 가 아님으로 구분됨
+}
+
 static void form_network(void)
 {
   EmberNetworkParameters params;
@@ -517,6 +573,7 @@ static void form_network(void)
 
   EmberStatus st = emberFormNetwork(&params);
   if (st == EMBER_SUCCESS) {
+    g_home_channel = params.radioChannel;   // ★ 복귀 기준점 확정(여기서만 정한다)
     app_log_info("Network FORMED on ch=%d, PAN=0x%04X\n",
                  params.radioChannel, params.panId);
     emberPermitJoining(0xFF);

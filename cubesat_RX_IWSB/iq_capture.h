@@ -132,6 +132,14 @@ bool iq_capture_ready(void);
 
 // [비행 안전] 캡처 후 패킷 수신 복구에 실패해 라디오가 귀머거리 상태인가?
 bool iq_radio_is_deaf(void);
+
+// 라디오를 패킷 모드 + 지정 채널 수신으로 되돌린다(RAIL 레벨, 스택 우회).
+//   home 복귀 시 emberSetRadioChannelExtended() 와 반드시 함께 호출할 것.
+void iq_radio_resume_on(uint8_t channel);
+
+// [진단] RAIL 라디오 상태 / 마지막 StopTxStream 결과.
+uint8_t iq_radio_state(void);
+int16_t iq_last_stop_status(void);
 // 귀머거리 상태면 수신 복구를 재시도한다. tick 에서 주기적으로 호출할 것.
 // 반환: true = 정상(또는 복구 성공), false = 아직 복구 실패.
 bool iq_radio_recover(void);

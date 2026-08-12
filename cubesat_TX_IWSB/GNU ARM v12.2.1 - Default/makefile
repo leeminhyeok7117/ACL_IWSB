@@ -8,6 +8,7 @@ RM := rm -rf
 
 # All of the sources participating in the build are defined here
 -include sources.mk
+-include gecko_sdk_4.5.0/util/third_party/segger/systemview/SEGGER/subdir.mk
 -include gecko_sdk_4.5.0/util/third_party/printf/src/subdir.mk
 -include gecko_sdk_4.5.0/util/third_party/printf/subdir.mk
 -include gecko_sdk_4.5.0/util/third_party/mbedtls/library/subdir.mk
